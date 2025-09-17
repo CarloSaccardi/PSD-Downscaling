@@ -3,8 +3,8 @@ import pytorch_lightning as pl
 import importlib
 import wandb
 import matplotlib.pyplot as plt
-from neural_lam import constants
-from neural_lam import vis
+from .. import constants
+from neural_lam import vis  # Keep this for now, will move later
 from typing import Callable, Optional, Tuple
 import random
 from torchmetrics.functional import structural_similarity_index_measure as ssim_func
@@ -13,7 +13,7 @@ import numpy as np
 from scipy.fft import fft
 import math
 
-from neural_lam.models.fourerLosses import FourierLossETH, FourierLossDelft, FourierLossHK, FourierLossCarlo
+from .losses.fourier_losses import FourierLossETH, FourierLossDelft, FourierLossHK, FourierLossCarlo
 
 network_module = importlib.import_module("physicsnemo.models.diffusion")
 

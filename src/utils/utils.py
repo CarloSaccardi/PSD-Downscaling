@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 import torch
 from torch import Tensor
-from neural_lam import constants
+from .. import constants
 from physicsnemo.utils.patching import GridPatching2D
 
 import numpy as np

@@ -6,12 +6,12 @@ from typing import Callable, Optional, List, Tuple, Union
 from torch import Tensor
 import nvtx
 import torch
-from neural_lam.models.unet import UNetWrapper
+from .unet import UNetWrapper
 import pytorch_lightning as pl
-from neural_lam.utils import stochastic_sampler, diffusion_step
+from ..utils.utils import stochastic_sampler, diffusion_step
 from functools import partial
 
-from neural_lam import constants
+from .. import constants
 import random
 
 import matplotlib.pyplot as plt

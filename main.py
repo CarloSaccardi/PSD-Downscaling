@@ -9,12 +9,24 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import constants, utils
-from neural_lam.models.unet import UNetWrapper
-from neural_lam.models.diffusion import DiffusionWrapper
-from neural_lam.weather_dataset import ERA5toCERRA2
+from src import constants, utils
+from src.models import UNetWrapper, DiffusionWrapper
+from src.data import ERA5toCERRA2
 import os
 import yaml
+
+# NEW: Import new configuration system (optional)
+try:
+    import sys
+    from pathlib import Path
+    src_path = str(Path(__file__).parent / "src")
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    from config.base_config import ExperimentConfig  # type: ignore
+    from config.legacy_compat import convert_legacy_config_to_new, create_legacy_args_from_config  # type: ignore
+    NEW_CONFIG_AVAILABLE = True
+except ImportError:
+    NEW_CONFIG_AVAILABLE = False
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
@@ -36,7 +48,7 @@ def get_args():
         "--config",
         type=str,
         default=None,
-        help="Path to config file",
+        help="Path to YAML config file (e.g., yaml_configs/good_runs/UNet/UNet_test.yaml)",
     )
     parser.add_argument(
         "--dataset_cerra",
@@ -276,17 +288,50 @@ def get_args():
         type=str,
         default=None,
         help="Path to resume training from (default: None)",
-    )   
+    )
+    
+    # NEW: Add new configuration system option
+    if NEW_CONFIG_AVAILABLE:
+        parser.add_argument(
+            "--use_new_config",
+            action="store_true",
+            help="Use new configuration system with validation (if available)"
+        )
+        parser.add_argument(
+            "--validate_config",
+            action="store_true", 
+            help="Validate configuration and exit (useful for testing configs)"
+        )
+    
     return parser.parse_args()
 
 def main(args):
-    # Asserts for arguments
-    assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.eval in (
+    # Convert legacy args to new config system
+    print("🔧 Using new configuration system with validation...")
+    
+    try:
+        config = convert_legacy_config_to_new(args)
+        print("✅ Configuration validation passed!")
+        
+        # If only validating, exit here
+        if hasattr(args, 'validate_config') and args.validate_config:
+            print("✅ Configuration is valid. Exiting as requested.")
+            return
+        
+        print("🔄 Using new configuration system directly")
+        
+    except Exception as e:
+        print(f"❌ Configuration validation failed: {e}")
+        print("💡 Tip: Check your YAML file for errors or use --help for more options")
+        return
+    
+    # Asserts for configuration
+    assert config.model.model_type in MODELS, f"Unknown model: {config.model.model_type}"
+    assert config.eval in (
         None,
         "val",
         "test",
-    ), f"Unknown eval setting: {args.eval}"
+    ), f"Unknown eval setting: {config.eval}"
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -294,7 +339,7 @@ def main(args):
     print(f"Using {devices} GPUs")
 
     # Set seed
-    seed.seed_everything(args.seed)
+    seed.seed_everything(config.training.seed)
 
     # Instantiate model + trainer
     if torch.cuda.is_available():
@@ -305,23 +350,27 @@ def main(args):
     else:
         device_name = "cpu"
 
-    # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args)
-        if args.restore_opt:
+    # Load model parameters
+    model_class = MODELS[config.model.model_type]
+    if config.load:
+        # For now, we still need to pass args to the model for backward compatibility
+        # This will be updated when we migrate the model classes
+        legacy_args = create_legacy_args_from_config(config)
+        model = model_class.load_from_checkpoint(config.load, args=legacy_args)
+        if config.restore_opt:
             # Save for later
             # Unclear if this works for multi-GPU
-            model.opt_state = torch.load(args.load)["optimizer_states"][0]
+            model.opt_state = torch.load(config.load)["optimizer_states"][0]
     else:
-        model = model_class(args)
+        legacy_args = create_legacy_args_from_config(config)
+        model = model_class(legacy_args)
 
-    prefix = "subset-" if args.subset_ds else ""
-    prefix += args.run_name if hasattr(args, "run_name") else ""
-    if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
+    prefix = "subset-" if config.dataset.subset_size else ""
+    prefix += config.run_name if config.run_name else ""
+    if config.eval:
+        prefix = prefix + f"eval-{config.eval}-"
     run_name = (
-        f"{prefix}-{args.model}-"
+        f"{prefix}-{config.model.model_type}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
 
@@ -337,9 +386,9 @@ def main(args):
         )
     )
     
-    if args.wandb_project is not None:
+    if config.wandb_project is not None:
         logger = pl.loggers.WandbLogger(
-            project=args.wandb_project, name=run_name, config=args
+            project=config.wandb_project, name=run_name, config=config
         )
     else:
         logger = pl.loggers.TensorBoardLogger(
@@ -353,7 +402,7 @@ def main(args):
     strategy = "ddp"
 
     trainer = pl.Trainer(
-        max_epochs=args.epochs,
+        max_epochs=config.training.epochs,
         deterministic=True,
         strategy=strategy,
         accelerator=device_name,
@@ -361,8 +410,8 @@ def main(args):
         logger=logger,
         log_every_n_steps=1,
         callbacks=callbacks,
-        check_val_every_n_epoch=args.val_interval,
-        precision=args.precision,
+        check_val_every_n_epoch=config.training.val_interval,
+        precision=config.training.precision,
         #profiler="simple",
     )
 
@@ -370,54 +419,52 @@ def main(args):
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
 
-    if args.eval:
+    if config.eval:
         eval_loader = torch.utils.data.DataLoader(
             ERA5toCERRA2(
-                args.dataset_cerra,
-                args.dataset_era5,
+                config.dataset.cerra_path,
+                config.dataset.era5_path,
                 split="test",#TODO: Change to val
                 subset=False,
             ),
-            args.batch_size,
+            config.training.batch_size,
             shuffle=False,
-            num_workers=args.n_workers,
+            num_workers=config.training.n_workers,
         )
 
-        print(f"Running evaluation on {args.eval}")
+        print(f"Running evaluation on {config.eval}")
         trainer.test(model=model, dataloaders=eval_loader)
     else:
-        
         # Load data
         train_loader = torch.utils.data.DataLoader(
             ERA5toCERRA2(
-                args.dataset_cerra,
-                args.dataset_era5,
+                config.dataset.cerra_path,
+                config.dataset.era5_path,
                 split="train",
-                subset=bool(args.subset_ds),
+                subset=bool(config.dataset.subset_size),
             ),
-            args.batch_size,
+            config.training.batch_size,
             shuffle=True,
-            num_workers=args.n_workers,
+            num_workers=config.training.n_workers,
         )
         
         val_loader = torch.utils.data.DataLoader(
             ERA5toCERRA2(
-                args.dataset_cerra,
-                args.dataset_era5,
+                config.dataset.cerra_path,
+                config.dataset.era5_path,
                 split="val",
-                subset=bool(args.subset_ds),
+                subset=bool(config.dataset.subset_size),
             ),
-            args.batch_size,
+            config.training.batch_size,
             shuffle=False,
-            num_workers=args.n_workers,
+            num_workers=config.training.n_workers,
         )
         # Train model
         trainer.fit(
             model=model,
             train_dataloaders=train_loader,
             val_dataloaders=val_loader,
-            ckpt_path= args.resume if args.resume else None,
-            
+            ckpt_path=config.resume if config.resume else None,
         )
 
 
