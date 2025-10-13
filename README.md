@@ -185,9 +185,6 @@ If you use this code in your research, please cite:
 
 For questions or issues, please:
 - Open an issue on GitHub
-- Contact: [your email]
+- Contact: c.saccardi@tudelft.nl
 
-## Acknowledgments
-
-This research was conducted at [Institution]. We acknowledge the use of ERA5 and CERRA reanalysis data provided by the European Centre for Medium-Range Weather Forecasts (ECMWF) and Copernicus Climate Change Service.
 
