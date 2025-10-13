@@ -1,6 +1,6 @@
 # PSD-Downscaling
 
-This repository contains the official implementation of the paper **"[Paper Title]"** (link to be added upon publication).
+This repository contains the official implementation of the paper **"Assessing the Geographic Generalization and Physical Consistency of Generative Models for Climate Downscaling"**, accepted at the AI for Science workshop at NeurIPS 2025.
 
 ## Overview
 
