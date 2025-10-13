@@ -11,7 +11,7 @@ from lightning_fabric.utilities import seed
 # First-party
 from src import constants, utils
 from src.models import UNetWrapper, DiffusionWrapper
-from src.data import ERA5CERRAtiled
+from src.data import ERA5toCERRA2
 import os
 import yaml
 
@@ -421,7 +421,7 @@ def main(args):
 
     if config.eval:
         eval_loader = torch.utils.data.DataLoader(
-            ERA5CERRAtiled(
+            ERA5toCERRA2(
                 config.dataset.cerra_path,
                 config.dataset.era5_path,
                 split="test",#TODO: Change to val
@@ -437,7 +437,7 @@ def main(args):
     else:
         # Load data
         train_loader = torch.utils.data.DataLoader(
-            ERA5CERRAtiled(
+            ERA5toCERRA2(
                 config.dataset.cerra_path,
                 config.dataset.era5_path,
                 split="train",
@@ -449,7 +449,7 @@ def main(args):
         )
         
         val_loader = torch.utils.data.DataLoader(
-            ERA5CERRAtiled(
+            ERA5toCERRA2(
                 config.dataset.cerra_path,
                 config.dataset.era5_path,
                 split="val",
