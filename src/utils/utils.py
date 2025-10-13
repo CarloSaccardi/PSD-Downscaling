@@ -20,12 +20,13 @@ import tqdm
 import os
 from physicsnemo.utils.generative import StackedRandomGenerator
 from tueplots import bundles, figsizes
+from scipy.stats import ks_2samp  
 
 from typing import Callable, Optional
 
 import torch
 from torch import Tensor
-from neural_lam import constants
+from .. import constants
 from physicsnemo.utils.patching import GridPatching2D
 
 import numpy as np
@@ -438,6 +439,7 @@ def load_dataset_stats(dataset_name, device="cpu"):
     }
 
 
+
 def compute_metrics(
     path_gt: str,
     path_pred: str,
@@ -494,14 +496,11 @@ def compute_metrics(
             g = gt[..., c]
             p = prd[..., c]
 
-            # pixel-wise errors
-            metric_sums[vname]["MAE"]  += np.abs(p - g).mean()
-            metric_sums[vname]["RMSE"] += np.sqrt(np.mean((p - g) ** 2))
-
-            # SSIM & PSNR
-            dr = g.max() - g.min()  # data_range
-            metric_sums[vname]["SSIM"] += ssim(g, p, data_range=dr) #for these metrics tesnrs should be (C, H, W) hence 
-            metric_sums[vname]["PSNR"] += psnr(g, p, data_range=dr)
+            metric_sums[vname]["MAE"]    += compute_mae(p, g)
+            metric_sums[vname]["RMSE"]   += compute_rmse(p, g)
+            metric_sums[vname]["SSIM"]   += compute_ssim_metric(p, g)
+            metric_sums[vname]["PSNR"]   += compute_psnr_metric(p, g)
+            metric_sums[vname]["Cramer"] += compute_cramer(p, g)
 
         n_files += 1
 
@@ -521,6 +520,56 @@ def compute_metrics(
             fh.write("\n")
 
     return metrics
+
+
+
+def compute_mae(p, g):
+    return np.abs(p - g).mean()
+
+def compute_rmse(p, g):
+    return np.sqrt(np.mean((p - g) ** 2))
+
+def compute_ssim_metric(p, g):
+    dr = g.max() - g.min()
+    return ssim(g, p, data_range=dr)
+
+def compute_psnr_metric(p, g):
+    dr = g.max() - g.min()
+    return psnr(g, p, data_range=dr)
+
+def compute_cramer(p, g):
+    gx = torch.from_numpy(g.flatten()).float().unsqueeze(1)
+    px = torch.from_numpy(p.flatten()).float().unsqueeze(1)
+    dxy = torch.cdist(gx, px).mean()
+    dgg = torch.cdist(gx, gx).mean()
+    dpp = torch.cdist(px, px).mean()
+    return (2 * dxy - dgg - dpp).item()
+
+def compute_wind_rmse(u_p, v_p, u_g, v_g):
+    """RMSE of wind‑speed magnitude."""
+    speed_p = np.hypot(u_p, v_p)
+    speed_g = np.hypot(u_g, v_g)
+    return np.sqrt(np.mean((speed_p - speed_g) ** 2))
+
+def compute_vorticity_rms(u_p, v_p, u_g, v_g, dx=5500, dy=5500):
+    """RMS of vorticity error  ζ = dv/dx − du/dy  (finite‑difference, same grid)."""
+    ζ_p = np.gradient(v_p, dx, axis=1) - np.gradient(u_p, dy, axis=0)
+    ζ_g = np.gradient(v_g, dx, axis=1) - np.gradient(u_g, dy, axis=0)
+    return np.sqrt(np.mean((ζ_p - ζ_g) ** 2))
+
+def compute_ks_metric(p, g):
+    """Two‑sample Kolmogorov–Smirnov statistic (two‑sided)."""
+    return ks_2samp(p.ravel(), g.ravel(), alternative="two-sided").statistic
+
+def compute_hill_metric(p, g, k=100):
+    """Absolute difference of Hill tail indices (heavy‑tail focus)."""
+    def hill(x, k):
+        x = np.abs(x.ravel()) + 1e-6  # ensure positive
+        x_sorted = np.sort(x)[::-1]
+        k = min(k, len(x_sorted) - 1)
+        x_k = x_sorted[k]
+        return (1.0 / k) * np.log(x_sorted[:k] / x_k).sum()
+    return abs(hill(p, k) - hill(g, k))
 
 
 def ensure_channels_last(arr: np.ndarray, C_expected: int) -> np.ndarray:

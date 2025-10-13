@@ -9,10 +9,9 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import constants, utils
-from neural_lam.models.unet import UNetWrapper
-from neural_lam.models.diffusion import DiffusionWrapper
-from neural_lam.weather_dataset import ERA5toCERRA2
+from src import constants, utils
+from src.models import UNetWrapper, DiffusionWrapper
+from src.data import ERA5toCERRA2
 import os
 import yaml
 

@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 # First-party
-from neural_lam import constants, utils
+from src import constants, utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))

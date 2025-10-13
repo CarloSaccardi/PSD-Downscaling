@@ -1,0 +1,46 @@
+# =========================
+# GENERAL OPTIONS
+# =========================
+dataset_cerra: "/projects/0/prjs1154/Scandinavia/CERRA"
+dataset_era5: "/projects/0/prjs1154/Scandinavia/ERA5"
+savepreds_path: "/projects/0/prjs1154/Scandinavia/preds_20142020_1dFFT"
+model: UNet-CNN                   # Model architecture
+subset_ds: 0                       # 0 = full dataset, >0 = subset size
+seed: 32
+n_workers: 8                       # Dataloader workers
+load: "saved_models/UNet-CNN-0001-UNet-CNN-06_19_19-8807/min_val_loss.ckpt" 
+restore_opt: 1                     # 0 = do not restore optimizer
+precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
+eval: "test"                         # val | test | null → train
+wandb_project: null #UNet-Cnn               # Optional wandb project name
+run_name: UNet-CNN-BigData-test        # Optional run name
+
+# =========================
+# DATASET SETTINGS
+# =========================
+output_variables: null             # List of vars to predict
+img_in_channels: 15
+img_out_channels: 5
+img_resolution: [368, 368]
+
+# =========================
+# MODEL SETTINGS
+# =========================
+N_grid_channels: 4
+embedding_type: zero
+model_channels: 64
+channel_mult: [1, 2, 2]
+attn_resolutions: [16]
+model_type: SongUNetPosEmbd
+
+# =========================
+# TRAINING SETTINGS
+# =========================
+val_interval: 1
+lr: 2.0e-4
+epochs: 200
+batch_size: 16
+lr_decay: 1
+lr_rampup: 0
+grad_clip_threshold: null          # Set a number to enable clipping
+checkpoint_level: 0
