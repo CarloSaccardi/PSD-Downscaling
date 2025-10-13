@@ -8,9 +8,9 @@ This codebase implements multiple deep learning approaches for statistical downs
 
 ### Implemented Methods
 
-1. **UNet-CNN (Regression)**: A deterministic U-Net-based model for direct regression from low-resolution to high-resolution fields
-2. **CorrDiff (Diffusion)**: A conditional diffusion model that generates probabilistic downscaled predictions conditioned on the regression model output
-3. **CRPS U-Net**: A probabilistic U-Net trained with Continuous Ranked Probability Score (CRPS) loss
+1. **UNet-CNN (Regression)**: A deterministic U-Net-based model for direct regression from low-resolution to high-resolution fields. This is the deterministic component of CorrDiff.
+3. **CRPS U-Net**: The same U-Net architecture but trained with Continuous Ranked Probability Score (CRPS) loss to make it probabilistic. 
+2. **CorrDiff (Diffusion)**: A conditional diffusion model that generates probabilistic downscaled predictions conditioned on the regression model output (UNet-CNN).
 
 ## Repository Structure
 
@@ -157,29 +157,10 @@ load: "saved_models/[run_name]/min_val_loss.ckpt"
 
 ## Logging
 
-The codebase supports two logging backends:
+The codebase supports logging with Weights & Biases:
 
 1. **Weights & Biases (W&B)**: Set `wandb_project` in your config file
-2. **TensorBoard**: Used automatically if `wandb_project` is set to `null`
 
-TensorBoard logs are saved to `DebugLogs/`.
-
-## Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-@article{[citation_key],
-  title={[Paper Title]},
-  author={[Authors]},
-  journal={[Journal/Conference]},
-  year={[Year]}
-}
-```
-
-## License
-
-[Specify license, e.g., MIT, Apache 2.0, etc.]
 
 ## Contact
 
