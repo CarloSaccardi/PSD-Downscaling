@@ -16,7 +16,7 @@ matplotlib==3.10.1
 plotly==6.0.1
 
 # Physics simulation
-nvidia-physicsnemo==1.1.0a0
+# nvidia-physicsnemo==1.1.0a0
 nvidia-dali-cuda120==1.49.0
 
 # Geospatial and meteorology
