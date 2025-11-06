@@ -1,0 +1,3 @@
+[submodule "physicsnemo"]
+	path = physicsnemo
+	url = https://github.com/NVIDIA/physicsnemo.git
