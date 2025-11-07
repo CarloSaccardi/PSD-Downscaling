@@ -16,6 +16,9 @@ import re
 from pathlib import Path
 from typing import List, Tuple
 
+import xarray as xr
+import pandas as pd
+
 
 class ERA5tCERRAStats(torch.utils.data.Dataset):
     """
@@ -251,3 +254,168 @@ class ERA5toCERRA2(torch.utils.data.Dataset):
 
         # 4) drop the batch dim
         return upsampled.squeeze(0)                      # [C, H_new, W_new]
+    
+    
+    
+
+class Era5CropDataset(torch.utils.data.Dataset):
+    """
+    Refactored custom PyTorch Dataset for ERA5 data.
+    - Uses helper functions in __getitem__ for clarity.
+    - Loads static data into RAM in __init__ for speed.
+    """
+    def __init__(self, 
+                 dynamic_f, 
+                 forcing_f, 
+                 stats_dir, 
+                 split,
+                 variables=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'], 
+                 crop_size=85):
+        super().__init__()
+        
+        # 1. Load statistics
+        self.mean_dynamic_vars = np.load(f"{stats_dir}/forcing_mean.npy")
+        self.std_dynamic_vars = np.load(f"{stats_dir}/forcing_std.npy")
+        self.mean_static_var = np.load(f"{stats_dir}/dynamic_mean.npy")
+        self.std_static_var = np.load(f"{stats_dir}/dynamic_std.npy")
+        
+        # 2. Open datasets
+        self.dynamic_f = xr.open_dataset(dynamic_f, chunks={'time': 1})
+        self.forcing_f = xr.open_dataset(forcing_f)
+        
+        # 3. Load static data into RAM (This is a key optimization)
+        self.geopotential_data = self.forcing_f['geopotential'].values.astype(np.float32)
+        
+        # 4. Load time axis into RAM (Good for performance)
+        self.time_axis = self.dynamic_f.time.values
+        
+        self.variables = variables
+        self.crop_size = crop_size
+        
+        # 5. Get dimensions
+        self.time_len = len(self.dynamic_f.time)
+        self.lat_len = len(self.dynamic_f.latitude)
+        self.lon_len = len(self.dynamic_f.longitude)
+        
+        # 6. Pre-calculate max indices for random cropping
+        self.max_lat_idx = self.lat_len - self.crop_size
+        self.max_lon_idx = self.lon_len - self.crop_size
+        
+        print(f"Dataset initialized:")
+        print(f"  Time steps: {self.time_len}")
+        print(f"  Total Channels: {len(self.variables) + 1 + 4}") # dynamic + static + time
+
+    def __len__(self):
+        return self.time_len
+
+    def __getitem__(self, idx):
+        """
+        Fetches one item: a random 81x81 crop from time step `idx`.
+        This is now a clean wrapper around helper functions.
+        """
+        
+        # 1. Get random crop start indices
+        lat_idx, lon_idx = self._get_random_crop_indices()
+        
+        # 2. Get 4 time embedding features
+        time_features = self._get_time_embedding(idx)
+        
+        # 3. Load/crop all data channels
+        crop_dynamics = self._load_crop_dynamic(idx, lat_idx, lon_idx)
+        crop_static = self._crop_static(lat_idx, lon_idx)
+        time_channels = self._broadcast_time_features(time_features)
+        
+        # 4. Normalize
+        crop_dynamics = (crop_dynamics - self.mean_dynamic_vars[:, None, None]) / self.std_dynamic_vars[:, None, None]
+        crop_static = (crop_static - self.mean_static_var) / self.std_static_var
+        
+        # 5. Concatenate and return
+        all_features = np.concatenate([crop_dynamics, crop_static, time_channels], axis=0)
+        
+        # 6. Convert to torch tensor and upsample
+        all_features_tensor = torch.from_numpy(all_features.copy()).float()
+        tensor = self._upsample(all_features_tensor, hr_tensor=(384, 384))
+        
+        return tensor
+
+    # --- Helper Functions ---
+
+    def _get_random_crop_indices(self):
+        """Returns random starting indices for a latitude and longitude."""
+        lat_idx = np.random.randint(0, self.max_lat_idx + 1)
+        lon_idx = np.random.randint(0, self.max_lon_idx + 1)
+        return lat_idx, lon_idx
+
+    def _get_time_embedding(self, idx):
+        """Computes the 4 time embedding features for a given time index."""
+        datetime = self.time_axis[idx]
+        dt_obj = pd.to_datetime(datetime)
+        day_of_year = dt_obj.dayofyear
+        hour = dt_obj.hour
+        
+        day_norm = 2 * np.pi * day_of_year / 365.25
+        hour_norm = 2 * np.pi * hour / 24.0
+
+        day_sin = (np.sin(day_norm) + 1) / 2
+        day_cos = (np.cos(day_norm) + 1) / 2
+        hour_sin = (np.sin(hour_norm) + 1) / 2
+        hour_cos = (np.cos(hour_norm) + 1) / 2
+        
+        return [day_sin, day_cos, hour_sin, hour_cos]
+
+    def _load_crop_dynamic(self, idx, lat_idx, lon_idx):
+        """Loads data from disk for one time-step and crops it."""
+        data_at_time = self.dynamic_f.isel(time=idx)
+        
+        stacked_channels = np.stack(
+            [data_at_time[var].values for var in self.variables], 
+            axis=0
+        )
+        
+        return stacked_channels[
+            :,  # All dynamic channels
+            lat_idx : lat_idx + self.crop_size,
+            lon_idx : lon_idx + self.crop_size
+        ]
+
+    def _crop_static(self, lat_idx, lon_idx):
+        """Crops the static data (already in RAM)."""
+        static_crop = self.geopotential_data[
+            lat_idx : lat_idx + self.crop_size,
+            lon_idx : lon_idx + self.crop_size
+        ]
+        # Add a channel dimension
+        return static_crop[None, :, :]
+
+    def _broadcast_time_features(self, time_features):
+        """Broadcasts the 4 time features to (4, H, W) channels."""
+        time_channels = np.zeros((4, self.crop_size, self.crop_size), dtype=np.float32)
+        for i, val in enumerate(time_features):
+            time_channels[i, :, :] = val
+        return time_channels
+    
+    def _upsample(self, lr_tensor, hr_tensor=(384, 384)):
+        """
+        Upsample the input tensor to match the target tensor's spatial dimensions.
+        """
+        # 1) add batch dim
+        era5_batched = lr_tensor.unsqueeze(0)                # [1, C, H_old, W_old]
+        # 2) pick the target spatial size from sample_CERRA
+        target_size = hr_tensor.shape[-2:]                  # (H_new, W_new)
+        # 3) interpolate
+        upsampled = F.interpolate(
+            era5_batched,
+            size=target_size,
+            mode='bicubic',
+            align_corners=False
+        )                                                      # [1, C, H_new, W_new]
+        # 4) drop the batch dim
+        return upsampled.squeeze(0)                      # [C, H_new, W_new]
+
+    def close(self):
+        """Closes the xarray dataset file handle."""
+        if self.dynamic_f:
+            self.dynamic_f.close()
+        if self.forcing_f:
+            self.forcing_f.close()
+            

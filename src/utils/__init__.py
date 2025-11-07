@@ -14,7 +14,7 @@ src_path = Path(__file__).parent.parent
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ..utils import (
+from .utils import (
     init_wandb_metrics,
     stochastic_sampler,
     diffusion_step,

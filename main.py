@@ -10,16 +10,15 @@ from lightning_fabric.utilities import seed
 
 # First-party
 from src import constants, utils
-from src.models import UNetWrapper, DiffusionWrapper
-from src.data import ERA5toCERRA2
+from src.models import UNetWrapper, DiffusionWrapper, SwinUNetrWrapper
+from src.data import Era5CropDataset
 import os
 import yaml
 
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
 MODELS = {
     "UNet-CNN": UNetWrapper,
-    "Diffusion": DiffusionWrapper
+    "Diffusion": DiffusionWrapper,
+    "Swin-Unetr": SwinUNetrWrapper
 }
 
 
@@ -50,12 +49,6 @@ def get_args():
         default="/aspire/CarloData/MASK_GNN_DATA/ERA5_60_n2_40_18",
         help="Dataset, corresponding to name in data directory "
         "(default: meps_example)",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="graph_efm",
-        help="Model architecture to train/evaluate (default: graph_lam)",
     )
     parser.add_argument(
         "--subset_ds",
@@ -114,12 +107,6 @@ def get_args():
     ########################################################
     # DATASET #
     parser.add_argument(
-        "--output_variables",  
-        type=list,
-        default=None,
-        help="List of output variables to predict",
-    )
-    parser.add_argument(
         "--img_in_channels",  
         type=int,
         default=5,
@@ -140,34 +127,10 @@ def get_args():
     ########################################################
     # MODEL #
     parser.add_argument(
-        "--N_grid_channels",  
-        type=int,
-        default=4,
-        help="Number of grid channels",
-    )
-    parser.add_argument(
-        "--embedding_type",  
-        type=str,
-        default="zero",
-        help="List of output variables to predict",
-    )
-    parser.add_argument(
         "--model_channels",  
         type=int,
         default=64,
         help="Number of model channels",
-    )
-    parser.add_argument(
-        "--channel_mult",  
-        type=list,
-        default=[1, 2, 2],
-        help="List of channel multipliers",
-    )
-    parser.add_argument(
-        "--attn_resolutions",  
-        type=list,
-        default=[16],
-        help="List of attention resolutions",
     )
     parser.add_argument(
         "--model_type",  
@@ -178,13 +141,6 @@ def get_args():
     ########################################################
     # TRAINING #
     parser.add_argument(
-        "--val_interval",
-        type=int,
-        default=1,
-        help="Number of epochs training between each validation run "
-        "(default: 1)",
-    )
-    parser.add_argument(
         "--lr", type=float, default=2e-4, help="learning rate (default: 0.001)"
     )
     parser.add_argument(
@@ -194,19 +150,10 @@ def get_args():
         help="upper epoch limit (default: 200)",
     )
     parser.add_argument(
-        "--anneal_epochs",
-        type=int,
-        default=200,
-        help="number of epochs to anneal lambda (default: 200)",
-    )
-    parser.add_argument(
         "--batch_size", type=int, default=8, help="batch size (default: 4)"
     )
     parser.add_argument(
         "--lr_decay", type=int, default=1, help="learning rate decay (default: 1)"
-    )
-    parser.add_argument(
-        "--lr_rampup", type=int, default=0, help="learning rate rampup (default: 0)"
     )
     parser.add_argument(
         "--grad_clip_threshold", type=int, default=None, help="gradient clipping threshold (default: None)"
@@ -217,23 +164,7 @@ def get_args():
         default=0,
         help="Checkpoint level for the model (default: 1)",
     )
-    parser.add_argument(
-        "--regression_net",
-        type=str,
-        help="Path to load model parameters from regression step.",
-    )
-    parser.add_argument(
-        "--gridtype",
-        type=str,
-        help="Type of positional grid to use: 'sinusoidal', 'learnable', 'linear', or 'test'.",
-    )
     #args.hr_mean_conditioning
-    parser.add_argument(
-        "--hr_mean_conditioning",
-        type=bool,
-        default=True,
-        help="Condition on regression model prediction or not",
-    )
     parser.add_argument(
         "--num_ensembles",
         type=int,
@@ -245,24 +176,6 @@ def get_args():
         type=str,
         default=None,
         help="Path to save predictions to",
-    )
-    parser.add_argument(
-        "--lambda_psd",
-        type=float,
-        default=0.1,
-        help="Weight for the PSD loss term (default: 0.0)",
-    )
-    parser.add_argument(
-        "--init_lambda",
-        type=float,
-        default=0.0,
-        help="Weight for the PSD loss term (default: 0.0)",
-    )
-    parser.add_argument(
-        "--max_lambda",
-        type=float,
-        default=0.1,
-        help="Weight for the PSD loss term (default: 0.0)",
     )
     parser.add_argument(
         "--loss_type",
@@ -369,56 +282,39 @@ def main(args):
     # Only init once, on rank 0 only
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
-
-    if args.eval:
-        eval_loader = torch.utils.data.DataLoader(
-            ERA5toCERRA2(
-                args.dataset_cerra,
-                args.dataset_era5,
-                split="test",#TODO: Change to val
-                subset=False,
-            ),
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
-        )
-
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
-    else:
         
-        # Load data
-        train_loader = torch.utils.data.DataLoader(
-            ERA5toCERRA2(
-                args.dataset_cerra,
-                args.dataset_era5,
-                split="train",
-                subset=bool(args.subset_ds),
-            ),
-            args.batch_size,
-            shuffle=True,
-            num_workers=args.n_workers,
-        )
+    # Load data
+    train_loader = torch.utils.data.DataLoader(
+        Era5CropDataset(
+            args.dataset_cerra,
+            args.dataset_era5,
+            split="train",
+            subset=bool(args.subset_ds),
+        ),
+        args.batch_size,
+        shuffle=True,
+        num_workers=args.n_workers,
+    )
+    
+    val_loader = torch.utils.data.DataLoader(
+        Era5CropDataset(
+            args.dataset_cerra,
+            args.dataset_era5,
+            split="val",
+            subset=bool(args.subset_ds),
+        ),
+        args.batch_size,
+        shuffle=False,
+        num_workers=args.n_workers,
+    )
+    # Train model
+    trainer.fit(
+        model=model,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader,
+        ckpt_path= args.resume if args.resume else None,
         
-        val_loader = torch.utils.data.DataLoader(
-            ERA5toCERRA2(
-                args.dataset_cerra,
-                args.dataset_era5,
-                split="val",
-                subset=bool(args.subset_ds),
-            ),
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
-        )
-        # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-            ckpt_path= args.resume if args.resume else None,
-            
-        )
+    )
 
 
 def update_args(args, config_dict):
