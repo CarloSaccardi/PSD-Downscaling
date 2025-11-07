@@ -15,7 +15,7 @@ import math
 
 from .losses.fourier_losses import FourierLossETH, FourierLossDelft, FourierLossHK, FourierLossCarlo
 
-network_module = importlib.import_module("physicsnemo.models.diffusion")
+network_module = importlib.import_module("physicsnemo.physicsnemo.models.diffusion")
 
 
 
