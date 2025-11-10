@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 # First-party
-from neural_lam import constants, utils
+from src.utils import constants, utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
@@ -93,7 +93,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
         im = ax.imshow(
             data_grid,
             origin="lower",
-            extent=constants.GRID_LIMITS_CERRA,
+            # extent=constants.GRID_LIMITS_CERRA,
             alpha=pixel_alpha,
             vmin=vmin,
             vmax=vmax,

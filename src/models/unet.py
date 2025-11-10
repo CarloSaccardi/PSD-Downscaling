@@ -3,8 +3,8 @@ import pytorch_lightning as pl
 import importlib
 import wandb
 import matplotlib.pyplot as plt
-from src import constants
-from src import vis
+from src.utils import constants
+from src.utils import vis
 from typing import Callable, Optional, Tuple
 import random
 from torchmetrics.functional import structural_similarity_index_measure as ssim_func

@@ -265,13 +265,15 @@ class Era5CropDataset(torch.utils.data.Dataset):
     - Loads static data into RAM in __init__ for speed.
     """
     def __init__(self, 
-                 dynamic_f, 
-                 forcing_f, 
-                 stats_dir, 
+                 path, 
                  split,
                  variables=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'], 
                  crop_size=85):
         super().__init__()
+        
+        stats_dir = os.path.join(path, "statistics")
+        dynamic_f = os.path.join(path, split, "Eurasia.nc")
+        forcing_f = os.path.join(path, split, "static_Eurasia.nc")
         
         # 1. Load statistics
         self.mean_dynamic_vars = np.load(f"{stats_dir}/forcing_mean.npy")
@@ -280,7 +282,7 @@ class Era5CropDataset(torch.utils.data.Dataset):
         self.std_static_var = np.load(f"{stats_dir}/dynamic_std.npy")
         
         # 2. Open datasets
-        self.dynamic_f = xr.open_dataset(dynamic_f, chunks={'time': 1})
+        self.dynamic_f = xr.open_dataset(dynamic_f) #, chunks={'time': 1})
         self.forcing_f = xr.open_dataset(forcing_f)
         
         # 3. Load static data into RAM (This is a key optimization)
@@ -364,19 +366,31 @@ class Era5CropDataset(torch.utils.data.Dataset):
         return [day_sin, day_cos, hour_sin, hour_cos]
 
     def _load_crop_dynamic(self, idx, lat_idx, lon_idx):
-        """Loads data from disk for one time-step and crops it."""
-        data_at_time = self.dynamic_f.isel(time=idx)
-        
-        stacked_channels = np.stack(
-            [data_at_time[var].values for var in self.variables], 
-            axis=0
-        )
-        
-        return stacked_channels[
-            :,  # All dynamic channels
-            lat_idx : lat_idx + self.crop_size,
-            lon_idx : lon_idx + self.crop_size
-        ]
+            """
+            Loads ONLY the cropped data from disk using lazy xarray slicing.
+            """
+            
+            # 1. Define the spatial slices (this is just metadata)
+            lat_slice = slice(lat_idx, lat_idx + self.crop_size)
+            lon_slice = slice(lon_idx, lon_idx + self.crop_size)
+
+            # 2. Chain all selections (variables, time, and space)
+            #    This is all LAZY. No data is read from disk yet.
+            data_crop = self.dynamic_f[self.variables].isel(
+                time=idx,
+                latitude=lat_slice,
+                longitude=lon_slice
+            )
+            
+            # 3. Convert the multi-variable Dataset into a single DataArray
+            #    This stacks variables along a new 'variable' dimension.
+            #    Still lazy.
+            data_array = data_crop.to_array()
+
+            # 4. NOW, call .values.
+            #    This executes the read, pulling ONLY the [n_vars, 85, 85]
+            #    block of data from the NetCDF file.
+            return data_array.values
 
     def _crop_static(self, lat_idx, lon_idx):
         """Crops the static data (already in RAM)."""
@@ -401,7 +415,7 @@ class Era5CropDataset(torch.utils.data.Dataset):
         # 1) add batch dim
         era5_batched = lr_tensor.unsqueeze(0)                # [1, C, H_old, W_old]
         # 2) pick the target spatial size from sample_CERRA
-        target_size = hr_tensor.shape[-2:]                  # (H_new, W_new)
+        target_size = hr_tensor                  # (H_new, W_new)
         # 3) interpolate
         upsampled = F.interpolate(
             era5_batched,

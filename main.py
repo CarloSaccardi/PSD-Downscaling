@@ -283,13 +283,12 @@ def main(args):
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
         
+    
     # Load data
     train_loader = torch.utils.data.DataLoader(
         Era5CropDataset(
-            args.dataset_cerra,
             args.dataset_era5,
             split="train",
-            subset=bool(args.subset_ds),
         ),
         args.batch_size,
         shuffle=True,
@@ -298,10 +297,8 @@ def main(args):
     
     val_loader = torch.utils.data.DataLoader(
         Era5CropDataset(
-            args.dataset_cerra,
             args.dataset_era5,
-            split="val",
-            subset=bool(args.subset_ds),
+            split="validation",
         ),
         args.batch_size,
         shuffle=False,
