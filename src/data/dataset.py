@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 # First-party
-from src import constants, utils
+from src.utils import constants, utils
 
 import torch.nn.functional as F
 

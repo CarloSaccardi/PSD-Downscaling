@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 # First-party
-from src.utils import constants, utils
+from . import constants, utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
@@ -188,7 +188,7 @@ def plot_on_axis(ax, data, alpha=None, vmin=None, vmax=None, ax_title=None):
     im = ax.imshow(
         data_grid,
         origin="lower",
-        extent=constants.GRID_LIMITS_CERRA,
+        # extent=constants.GRID_LIMITS_CERRA,
         alpha=alpha,
         vmin=vmin,
         vmax=vmax,

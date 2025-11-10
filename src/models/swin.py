@@ -19,12 +19,6 @@ import random
 from src.utils import constants, vis
 import matplotlib.pyplot as plt
 import wandb
-import os
-import sys
-project_root = os.path.dirname(os.path.abspath(__file__))
-monai_repo_path = os.path.join(project_root, 'MONAI')
-if monai_repo_path not in sys.path:
-    sys.path.insert(0, monai_repo_path)
     
 from monai.networks.nets.swin_unetr import SwinUNETR
 from monai.utils import ensure_tuple_rep

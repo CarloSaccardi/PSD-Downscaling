@@ -31,8 +31,8 @@ def init_wandb_metrics(wandb_logger):
     """
     experiment = wandb_logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
-    for step in constants.VAL_STEP_LOG_ERRORS:
-        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+    # for step in constants.VAL_STEP_LOG_ERRORS:
+    #     experiment.define_metric(f"val_loss_unroll{step}", summary="min")
 
 
 

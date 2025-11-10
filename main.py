@@ -9,7 +9,7 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from src import constants, utils
+from src.utils import utils
 from src.models import UNetWrapper, DiffusionWrapper, SwinUNetrWrapper
 from src.data import Era5CropDataset
 import os
@@ -288,7 +288,7 @@ def main(args):
     train_loader = torch.utils.data.DataLoader(
         Era5CropDataset(
             args.dataset_era5,
-            split="train",
+            split="validation",
         ),
         args.batch_size,
         shuffle=True,
