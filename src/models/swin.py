@@ -16,7 +16,7 @@ import torch.nn.functional as F # Using F.mse_loss is common
 import pytorch_lightning as pl
 
 import random
-from src import constants, vis
+from src.utils import constants, vis
 import matplotlib.pyplot as plt
 import wandb
 import os
