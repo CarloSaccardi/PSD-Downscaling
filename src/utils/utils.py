@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 from typing import Optional, Callable
 from physicsnemo.utils.patching import GridPatching2D
-from physicsnemo.utils import StackedRandomGenerator
+from physicsnemo.utils.generative import StackedRandomGenerator
 import tqdm
 import nvtx
 
