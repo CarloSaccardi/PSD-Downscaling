@@ -257,7 +257,6 @@ class ERA5toCERRA2(torch.utils.data.Dataset):
     
     
     
-
 class Era5CropDataset(torch.utils.data.Dataset):
     """
     Refactored custom PyTorch Dataset for ERA5 data.
@@ -267,6 +266,9 @@ class Era5CropDataset(torch.utils.data.Dataset):
     def __init__(self, 
                  path, 
                  split,
+                 mask_ratio,
+                 model_patch_size,
+                 mask_patch_size,
                  variables=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'], 
                  crop_size=85):
         super().__init__()
@@ -303,6 +305,14 @@ class Era5CropDataset(torch.utils.data.Dataset):
         self.max_lat_idx = self.lat_len - self.crop_size
         self.max_lon_idx = self.lon_len - self.crop_size
         
+        #7. Initialize masking generator
+        self.mask_generator = MaskGenerator(
+            input_size=384,  # Your final upsampled size
+            mask_patch_size=mask_patch_size,
+            model_patch_size=model_patch_size, # Must match your model's patch size
+            mask_ratio=mask_ratio
+        )
+        
         print(f"Dataset initialized:")
         print(f"  Time steps: {self.time_len}")
         print(f"  Total Channels: {len(self.variables) + 1 + 4}") # dynamic + static + time
@@ -338,7 +348,13 @@ class Era5CropDataset(torch.utils.data.Dataset):
         all_features_tensor = torch.from_numpy(all_features.copy()).float()
         tensor = self._upsample(all_features_tensor, hr_tensor=(384, 384))
         
-        return tensor
+        # 7. --- GENERATE MASK ---
+        # Call the generator you made in __init__
+        mask = self.mask_generator()
+        # Convert mask from numpy array to a torch tensor
+        mask_tensor = torch.from_numpy(mask).float()
+        
+        return tensor, mask_tensor
 
     # --- Helper Functions ---
 
@@ -433,3 +449,30 @@ class Era5CropDataset(torch.utils.data.Dataset):
         if self.forcing_f:
             self.forcing_f.close()
             
+
+
+class MaskGenerator:
+    def __init__(self, input_size, mask_patch_size, model_patch_size, mask_ratio):
+        self.input_size = input_size
+        self.mask_patch_size = mask_patch_size
+        self.model_patch_size = model_patch_size
+        self.mask_ratio = mask_ratio
+        
+        assert self.input_size % self.mask_patch_size == 0
+        assert self.mask_patch_size % self.model_patch_size == 0
+        
+        self.rand_size = self.input_size // self.mask_patch_size
+        self.scale = self.mask_patch_size // self.model_patch_size
+        
+        self.token_count = self.rand_size ** 2
+        self.mask_count = int(np.ceil(self.token_count * self.mask_ratio))
+        
+    def __call__(self):
+        mask_idx = np.random.permutation(self.token_count)[:self.mask_count]
+        mask = np.zeros(self.token_count, dtype=int)
+        mask[mask_idx] = 1
+        
+        mask = mask.reshape((self.rand_size, self.rand_size))
+        mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
+        
+        return mask

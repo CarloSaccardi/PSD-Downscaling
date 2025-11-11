@@ -189,6 +189,25 @@ def get_args():
         default=None,
         help="Path to resume training from (default: None)",
     )   
+    #simMIM args
+    parser.add_argument(
+        "--mask_ratio",
+        type=int,
+        default=0.6,
+        help="Mask ratio for simMIM models (default: None)",
+    )   
+    parser.add_argument(
+        "--model_patch_size",
+        type=int,
+        default=2,
+        help="Patch size for model (default: 4)",
+    )
+    parser.add_argument(
+        "--mask_patch_size",
+        type=int,
+        default=32,
+        help="Patch size for masking (default: 16)",
+    )
     return parser.parse_args()
 
 def main(args):
@@ -288,7 +307,10 @@ def main(args):
     train_loader = torch.utils.data.DataLoader(
         Era5CropDataset(
             args.dataset_era5,
-            split="validation",
+            split="train",
+            mask_ratio=args.mask_ratio,
+            model_patch_size=args.model_patch_size,
+            mask_patch_size=args.mask_patch_size,
         ),
         args.batch_size,
         shuffle=True,
@@ -299,6 +321,9 @@ def main(args):
         Era5CropDataset(
             args.dataset_era5,
             split="validation",
+            mask_ratio=args.mask_ratio,
+            model_patch_size=args.model_patch_size,
+            mask_patch_size=args.mask_patch_size,
         ),
         args.batch_size,
         shuffle=False,

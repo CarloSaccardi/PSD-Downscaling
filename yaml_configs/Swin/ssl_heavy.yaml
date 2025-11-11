@@ -11,7 +11,7 @@ load: null
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
-wandb_project: Swin                #UNet-Cnn               # Optional wandb project name
+wandb_project: Swin-simMIM                #UNet-Cnn               # Optional wandb project name
 run_name: Swin-Debug               # Optional run name
 
 # =========================
@@ -21,6 +21,14 @@ output_variables: null             # List of vars to predict
 img_in_channels: 11
 img_out_channels: 11
 img_resolution: [384, 384]
+use_light_decoder: False
+
+# =========================
+# MASKING SETTINGS
+# =========================
+mask_ratio: 0.6                     # Ratio of input to mask
+model_patch_size: 2
+mask_patch_size: 32
 
 # =========================
 # MODEL SETTINGS

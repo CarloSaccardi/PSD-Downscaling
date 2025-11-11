@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import wandb
     
 from monai.networks.nets.swin_unetr import SwinUNETR
+from monai.networks.nets.swin_simMIM import SimMIMSwinUNETR
 from monai.utils import ensure_tuple_rep
 
 
@@ -37,7 +38,8 @@ class SwinUNetrWrapper(pl.LightningModule):
         window_size = ensure_tuple_rep(7, len(args.img_resolution))  # (7, 7) for 2D
         
         # Use the original SwinUNETR architecture
-        self.swin_unetr = SwinUNETR(
+        self.swin_unetr = SimMIMSwinUNETR(
+            use_light_decoder=args.use_light_decoder,
             in_channels=args.img_in_channels,
             out_channels=args.img_out_channels,  # Reconstruction: output same as input
             patch_size=2,
@@ -60,19 +62,27 @@ class SwinUNetrWrapper(pl.LightningModule):
             use_v2=False,
         )
         
-    # --- CHANGE 2: Implement the forward pass ---
-    def forward(self, x):
+    def forward(self, x, patch_mask):
         """
         Defines the forward pass of the model.
         """
         # SwinUNETR returns the reconstructed output
-        # x.contiguous() is good practice for transformers
-        return self.swin_unetr(x.contiguous())
+        return self.swin_unetr(x.contiguous(), patch_mask.contiguous())
 
     def training_step(self, batch, batch_idx):
-        x = batch 
-        x_rec = self(x) 
-        loss = F.mse_loss(x_rec, x)
+        x, mask = batch 
+        x_rec, mask_bool = self(x, mask) 
+        
+        x = x[:, :6]
+        x_rec = x_rec[:, :6]
+        
+        loss_mask = ~mask_bool
+        loss_mask = loss_mask.expand_as(x)
+        masked_rec = x_rec[loss_mask]
+        masked_target = x[loss_mask]
+        loss = F.mse_loss(masked_rec, masked_target)
+        
+        # loss = F.mse_loss(x_rec, x)
         train_log_dict = {
             "train_loss": loss,
         }
@@ -82,9 +92,18 @@ class SwinUNetrWrapper(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        x = batch 
-        x_rec = self(x) 
-        loss = F.mse_loss(x_rec, x)
+        x, mask = batch 
+        x_rec, mask_bool = self(x, mask) 
+        
+        x = x[:, :6]
+        x_rec = x_rec[:, :6]
+        
+        loss_mask = ~mask_bool
+        loss_mask = loss_mask.expand_as(x)
+        masked_rec = x_rec[loss_mask]
+        masked_target = x[loss_mask]
+        loss = F.mse_loss(masked_rec, masked_target)
+        
         val_log_dict = {
             "val_loss": loss,
         }
