@@ -73,9 +73,6 @@ class SwinUNetrWrapper(pl.LightningModule):
         x, mask = batch 
         x_rec, mask_bool = self(x, mask) 
         
-        x = x[:, :6]
-        x_rec = x_rec[:, :6]
-        
         loss_mask = ~mask_bool
         loss_mask = loss_mask.expand_as(x)
         masked_rec = x_rec[loss_mask]
@@ -94,9 +91,6 @@ class SwinUNetrWrapper(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, mask = batch 
         x_rec, mask_bool = self(x, mask) 
-        
-        x = x[:, :6]
-        x_rec = x_rec[:, :6]
         
         loss_mask = ~mask_bool
         loss_mask = loss_mask.expand_as(x)
