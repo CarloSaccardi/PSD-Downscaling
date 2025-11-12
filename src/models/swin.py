@@ -68,9 +68,18 @@ class SwinUNetrWrapper(pl.LightningModule):
         """
         # SwinUNETR returns the reconstructed output
         return self.swin_unetr(x.contiguous(), patch_mask.contiguous())
+    
+    def configure_optimizers(self):
+        opt = torch.optim.Adam(
+            self.swin_unetr.parameters(), 
+            lr=self.hparams.lr
+        )
+        return opt
 
     def training_step(self, batch, batch_idx):
         x, mask = batch 
+        x = self._upsample(x)
+        
         x_rec, mask_bool = self(x, mask) 
         
         loss_mask = ~mask_bool
@@ -90,6 +99,8 @@ class SwinUNetrWrapper(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         x, mask = batch 
+        x = self._upsample(x)
+        
         x_rec, mask_bool = self(x, mask) 
         
         loss_mask = ~mask_bool
@@ -158,10 +169,16 @@ class SwinUNetrWrapper(pl.LightningModule):
             wandb.log(log_plot_dict)
 
         plt.close("all") 
-    
-    def configure_optimizers(self):
-        opt = torch.optim.Adam(
-            self.swin_unetr.parameters(), 
-            lr=self.hparams.lr
-        )
-        return opt
+        
+        
+    def _upsample(self, lr_tensor, target_size=(384, 384)):
+        """
+        Upsample the input tensor to match the target tensor's spatial dimensions.
+        """
+        #interpolate
+        return F.interpolate(
+                lr_tensor,
+                size=target_size,
+                mode='bicubic',
+                align_corners=False
+            )                                                     

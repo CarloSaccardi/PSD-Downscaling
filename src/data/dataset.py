@@ -344,9 +344,8 @@ class Era5CropDataset(torch.utils.data.Dataset):
         # 5. Concatenate and return
         all_features = np.concatenate([crop_dynamics, crop_static, time_channels], axis=0)
         
-        # 6. Convert to torch tensor and upsample
+        # 6. Convert to torch tensor
         all_features_tensor = torch.from_numpy(all_features.copy()).float()
-        tensor = self._upsample(all_features_tensor, hr_tensor=(384, 384))
         
         # 7. --- GENERATE MASK ---
         # Call the generator you made in __init__
@@ -354,7 +353,7 @@ class Era5CropDataset(torch.utils.data.Dataset):
         # Convert mask from numpy array to a torch tensor
         mask_tensor = torch.from_numpy(mask).float()
         
-        return tensor, mask_tensor
+        return all_features_tensor, mask_tensor
 
     # --- Helper Functions ---
 
@@ -423,24 +422,6 @@ class Era5CropDataset(torch.utils.data.Dataset):
         for i, val in enumerate(time_features):
             time_channels[i, :, :] = val
         return time_channels
-    
-    def _upsample(self, lr_tensor, hr_tensor=(384, 384)):
-        """
-        Upsample the input tensor to match the target tensor's spatial dimensions.
-        """
-        # 1) add batch dim
-        era5_batched = lr_tensor.unsqueeze(0)                # [1, C, H_old, W_old]
-        # 2) pick the target spatial size from sample_CERRA
-        target_size = hr_tensor                  # (H_new, W_new)
-        # 3) interpolate
-        upsampled = F.interpolate(
-            era5_batched,
-            size=target_size,
-            mode='bicubic',
-            align_corners=False
-        )                                                      # [1, C, H_new, W_new]
-        # 4) drop the batch dim
-        return upsampled.squeeze(0)                      # [C, H_new, W_new]
 
     def close(self):
         """Closes the xarray dataset file handle."""
