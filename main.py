@@ -315,6 +315,7 @@ def main(args):
         args.batch_size,
         shuffle=True,
         num_workers=args.n_workers,
+        pin_memory=True,
     )
     
     val_loader = torch.utils.data.DataLoader(
@@ -328,6 +329,7 @@ def main(args):
         args.batch_size,
         shuffle=False,
         num_workers=args.n_workers,
+        pin_memory=True,
     )
     # Train model
     trainer.fit(
