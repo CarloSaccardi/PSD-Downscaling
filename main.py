@@ -11,7 +11,7 @@ from lightning_fabric.utilities import seed
 # First-party
 from src.utils import utils
 from src.models import UNetWrapper, DiffusionWrapper, SwinUNetrWrapper
-from src.data import Era5CropDataset
+from src.data import Era5CropDataset, CerraEra5SuperResDataset
 import os
 import yaml
 
@@ -70,13 +70,6 @@ def get_args():
         "--load",
         type=str,
         help="Path to load model parameters from (default: None)",
-    )
-    parser.add_argument(
-        "--restore_opt",
-        type=int,
-        default=0,
-        help="If optimizer state should be restored with model "
-        "(default: 0 (false))",
     )
     parser.add_argument(
         "--precision",
@@ -302,33 +295,59 @@ def main(args):
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
         
-    
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        Era5CropDataset(
-            args.dataset_era5,
-            split="train",
-            mask_ratio=args.mask_ratio,
-            model_patch_size=args.model_patch_size,
-            mask_patch_size=args.mask_patch_size,
-        ),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    
-    val_loader = torch.utils.data.DataLoader(
-        Era5CropDataset(
-            args.dataset_era5,
-            split="validation",
-            mask_ratio=args.mask_ratio,
-            model_patch_size=args.model_patch_size,
-            mask_patch_size=args.mask_patch_size,
-        ),
-        args.batch_size,
-        shuffle=False,
-        num_workers=args.n_workers,
-    )
+    if args.use_light_decoder:
+        # Load data
+        train_loader = torch.utils.data.DataLoader(
+            Era5CropDataset(
+                args.dataset_era5,
+                split="train",
+                mask_ratio=args.mask_ratio,
+                model_patch_size=args.model_patch_size,
+                mask_patch_size=args.mask_patch_size,
+            ),
+            args.batch_size,
+            shuffle=True,
+            num_workers=args.n_workers,
+        )
+        
+        val_loader = torch.utils.data.DataLoader(
+            Era5CropDataset(
+                args.dataset_era5,
+                split="validation",
+                mask_ratio=args.mask_ratio,
+                model_patch_size=args.model_patch_size,
+                mask_patch_size=args.mask_patch_size,
+            ),
+            args.batch_size,
+            shuffle=False,
+            num_workers=args.n_workers,
+        )
+        
+    else:
+        # Load data
+        train_loader = torch.utils.data.DataLoader(
+            CerraEra5SuperResDataset(
+                args.dataset_cerra,
+                args.dataset_era5,
+                region="Iberia",
+                split="train",
+            ),
+            args.batch_size,
+            shuffle=True,
+            num_workers=args.n_workers,
+        )
+        
+        val_loader = torch.utils.data.DataLoader(
+            CerraEra5SuperResDataset(
+                args.dataset_cerra,
+                args.dataset_era5,
+                region="Iberia",
+                split="validation",
+            ),
+            args.batch_size,
+            shuffle=False,
+            num_workers=args.n_workers,
+        )
     # Train model
     trainer.fit(
         model=model,
