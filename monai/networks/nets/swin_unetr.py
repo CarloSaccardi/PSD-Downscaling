@@ -23,6 +23,7 @@ from torch.nn import LayerNorm
 
 from monai.networks.blocks import MLPBlock as Mlp
 from monai.networks.blocks import PatchEmbed, UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
+from monai.networks.blocks.patchembedding import PatchEmbed2DSeparate
 from monai.networks.layers import DropPath, trunc_normal_
 from monai.utils import ensure_tuple_rep, look_up_option, optional_import
 
@@ -973,6 +974,8 @@ class SwinTransformer(nn.Module):
         self.patch_norm = patch_norm
         self.window_size = window_size
         self.patch_size = patch_size
+        # dynamic_embed_dim = (dynamic_embed_dim //3) * 2
+        # forcing_embed_dim = forcing_embed_dim //3
         self.patch_embed = PatchEmbed(
             patch_size=self.patch_size,
             in_chans=in_chans,
@@ -980,6 +983,15 @@ class SwinTransformer(nn.Module):
             norm_layer=norm_layer if self.patch_norm else None,  # type: ignore
             spatial_dims=spatial_dims,
         )
+        # self.patch_embed = PatchEmbed2DSeparate(
+        #         img_size=(384, 384), 
+        #         patch_size=self.patch_size, 
+        #         dynamic_channels=6, 
+        #         forcing_channels=5, 
+        #         dynamic_embed_dim=dynamic_embed_dim,  # <-- New: Explicit dim for dynamics, 128
+        #         forcing_embed_dim=forcing_embed_dim,  # <-- New: Explicit dim for forcing, 64
+        #         norm_layer=norm_layer if self.patch_norm else None
+        # )
         self.pos_drop = nn.Dropout(p=drop_rate)
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         self.use_v2 = use_v2

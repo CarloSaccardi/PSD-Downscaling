@@ -30,6 +30,7 @@ class SwinUNetrWrapper(pl.LightningModule):
         super(SwinUNetrWrapper, self).__init__()
         
         self.wandb_project = args.wandb_project
+        self.use_light_decoder = args.use_light_decoder
         
         # This makes args available as self.hparams (e.g., self.hparams.lr)
         self.save_hyperparameters(args)
@@ -62,12 +63,7 @@ class SwinUNetrWrapper(pl.LightningModule):
             use_v2=False,
         )
         
-    def forward(self, x, patch_mask):
-        """
-        Defines the forward pass of the model.
-        """
-        # SwinUNETR returns the reconstructed output
-        return self.swin_unetr(x.contiguous(), patch_mask.contiguous())
+        
     
     def configure_optimizers(self):
         opt = torch.optim.Adam(
@@ -75,20 +71,31 @@ class SwinUNetrWrapper(pl.LightningModule):
             lr=self.hparams.lr
         )
         return opt
+    
+        
+    def forward(self, x, mask):
+        """
+        Forward pass that handles both pre-training and fine-tuning modes.
+        
+        Returns:
+            x_rec: Reconstructed tensor
+            mask_bool: Mask tensor (None for fine-tuning)
+        """
+        if self.use_light_decoder:
+            x_rec, mask_bool = self(x, mask)
+            return x_rec, mask_bool
+        else:
+            x_rec = self(x, mask=None)
+            return x_rec, None
+    
 
     def training_step(self, batch, batch_idx):
         x, mask = batch 
         x = self._upsample(x)
         
-        x_rec, mask_bool = self(x, mask) 
+        x_rec, mask_bool = self.forward(x, mask)
+        loss = self.get_loss(x, x_rec, mask_bool)
         
-        loss_mask = ~mask_bool
-        loss_mask = loss_mask.expand_as(x)
-        masked_rec = x_rec[loss_mask]
-        masked_target = x[loss_mask]
-        loss = F.mse_loss(masked_rec, masked_target)
-        
-        # loss = F.mse_loss(x_rec, x)
         train_log_dict = {
             "train_loss": loss,
         }
@@ -97,17 +104,13 @@ class SwinUNetrWrapper(pl.LightningModule):
         )
         return loss
     
+
     def validation_step(self, batch, batch_idx):
         x, mask = batch 
         x = self._upsample(x)
         
-        x_rec, mask_bool = self(x, mask) 
-        
-        loss_mask = ~mask_bool
-        loss_mask = loss_mask.expand_as(x)
-        masked_rec = x_rec[loss_mask]
-        masked_target = x[loss_mask]
-        loss = F.mse_loss(masked_rec, masked_target)
+        x_rec, mask_bool = self.forward(x, mask)
+        loss = self.get_loss(x, x_rec, mask_bool)
         
         val_log_dict = {
             "val_loss": loss,
@@ -123,6 +126,34 @@ class SwinUNetrWrapper(pl.LightningModule):
             and self.wandb_project is not None
         ):
             self.load_metrics_and_plots(x_rec, x, batch_idx, mask=None)
+            
+            
+    def get_loss(self, x, x_rec, mask_bool=None):
+        """
+        Compute loss based on the training mode.
+        
+        Args:
+            x: Ground truth input tensor
+            x_rec: Reconstructed/predicted tensor
+            mask_bool: Boolean mask tensor (only used when use_light_decoder=True)
+        
+        Returns:
+            loss: Computed loss value
+        """
+        if self.use_light_decoder:
+            # Pre-training: compute loss only on masked regions
+            loss_mask = ~mask_bool
+            loss_mask = loss_mask.expand_as(x)
+            masked_rec = x_rec[loss_mask]
+            masked_target = x[loss_mask]
+            loss = F.mse_loss(masked_rec, masked_target)
+            
+        else:
+            # Fine-tuning: compute loss on entire input (no masking)
+            loss = F.mse_loss(x_rec, x)
+        
+        return loss
+    
             
     def load_metrics_and_plots(self, prediction, high_res, batch_idx, mask=None):
         

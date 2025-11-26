@@ -233,3 +233,79 @@ class PatchEmbed(nn.Module):
                 wh, ww = x_shape[2], x_shape[3]
                 x = x.transpose(1, 2).view(-1, self.embed_dim, wh, ww)
         return x
+
+
+class PatchEmbed2DSeparate(nn.Module):
+    """
+    Modified to accept separate, asymmetric embedding dimensions
+    for the two towers.
+    """
+
+    def __init__(self, 
+                 img_size, 
+                 patch_size, 
+                 dynamic_channels, 
+                 forcing_channels, 
+                 dynamic_embed_dim,  # <-- New: Explicit dim for dynamics, 128
+                 forcing_embed_dim,  # <-- New: Explicit dim for forcing, 64
+                 norm_layer=None):
+        super().__init__()
+        
+        # ... (Padding logic remains exactly the same) ...
+        self.img_size = img_size
+        height, width = img_size
+        h_patch_size, w_path_size = patch_size
+        padding_left = padding_right = padding_top = padding_bottom = 0
+
+        h_remainder = height % h_patch_size
+        w_remainder = width % w_path_size
+
+        if h_remainder:
+            h_pad = h_patch_size - h_remainder
+            padding_top = h_pad // 2
+            padding_bottom = int(h_pad - padding_top)
+
+        if w_remainder:
+            w_pad = w_path_size - w_remainder
+            padding_left = w_pad // 2
+            padding_right = int(w_pad - padding_left)
+
+        self.pad = nn.ZeroPad2d(
+            (padding_left, padding_right, padding_top, padding_bottom)
+        )
+
+        # --- Use the new explicit dimensions ---
+        self.proj_dynamic = nn.Conv2d(
+            dynamic_channels, 
+            dynamic_embed_dim,  # Use the specific dim
+            kernel_size=patch_size, 
+            stride=patch_size
+        )
+        self.norm_dynamic = norm_layer(dynamic_embed_dim) if norm_layer is not None else None
+
+        self.proj_forcing = nn.Conv2d(
+            forcing_channels, 
+            forcing_embed_dim,  # Use the specific dim
+            kernel_size=patch_size, 
+            stride=patch_size
+        )
+        self.norm_forcing = norm_layer(forcing_embed_dim) if norm_layer is not None else None
+
+    def forward(self, x: torch.Tensor):
+        # ... (The forward pass remains exactly the same) ...
+        
+        x_dynamic, x_forcing = x[:, :self.proj_dynamic.in_channels, :, :], x[:, self.proj_dynamic.in_channels:, :, :]
+        
+        x_dyn = self.pad(x_dynamic)
+        x_dyn = self.proj_dynamic(x_dyn)
+        if self.norm_dynamic is not None:
+            x_dyn = self.norm_dynamic(x_dyn.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+
+        x_force = self.pad(x_forcing)
+        x_force = self.proj_forcing(x_force)
+        if self.norm_forcing is not None:
+            x_force = self.norm_forcing(x_force.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        
+        x_merged = torch.cat([x_dyn, x_force], dim=1)
+        
+        return x_merged
