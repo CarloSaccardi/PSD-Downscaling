@@ -61,89 +61,89 @@ class SimMIMSwinUNETR(SwinUNETR):
             # Freeze the mask token (learned during pre-training)
             self.mask_token.requires_grad = False
 
-def forward(self, x_in, patch_mask):
-    """
-    Modified forward pass for SimMIM (2D Only).
-    
-    Args:
-        x_in (torch.Tensor): Input image tensor (B, C, H, W).
-        patch_mask (torch.Tensor): Mask for tokens (B, H_p, W_p) 
-                                   or (B, L) where L is num_patches.
-                                   1 = MASKED, 0 = UNMASKED.
-                                   Only used when use_light_decoder=True (pre-training).
-    """
-    if self.use_light_decoder:
-        # --- PRE-TRAINING MODE: Apply masking ---
-        patch_size_tuple = self.swinViT.patch_size # (patch_h, patch_w)
+    def forward(self, x_in, patch_mask):
+        """
+        Modified forward pass for SimMIM (2D Only).
         
-        # --- 1. Create PIXEL-LEVEL mask (for Conv Skips) ---
-        # We use (1.0 - patch_mask) because 1 means MASKED, so we multiply by 0
-        pixel_mask = (1.0 - patch_mask).repeat_interleave(patch_size_tuple[0], 1) \
-                                    .repeat_interleave(patch_size_tuple[1], 2)
-        pixel_mask = pixel_mask.unsqueeze(1) # (B, 1, H, W)
+        Args:
+            x_in (torch.Tensor): Input image tensor (B, C, H, W).
+            patch_mask (torch.Tensor): Mask for tokens (B, H_p, W_p) 
+                                    or (B, L) where L is num_patches.
+                                    1 = MASKED, 0 = UNMASKED.
+                                    Only used when use_light_decoder=True (pre-training).
+        """
+        if self.use_light_decoder:
+            # --- PRE-TRAINING MODE: Apply masking ---
+            patch_size_tuple = self.swinViT.patch_size # (patch_h, patch_w)
+            
+            # --- 1. Create PIXEL-LEVEL mask (for Conv Skips) ---
+            # We use (1.0 - patch_mask) because 1 means MASKED, so we multiply by 0
+            pixel_mask = (1.0 - patch_mask).repeat_interleave(patch_size_tuple[0], 1) \
+                                        .repeat_interleave(patch_size_tuple[1], 2)
+            pixel_mask = pixel_mask.unsqueeze(1) # (B, 1, H, W)
+            
+            # --- 2. Create TOKEN-masked input for TRANSFORMER backbone ---
+            #    This uses the *original* x_in to get real embeddings,
+            #    which are then replaced by the learnable mask_token.
+            x0_unmasked_embed = self.swinViT.patch_embed(x_in)
+            x0_unmasked_embed = self.swinViT.pos_drop(x0_unmasked_embed)
+            
+            x_embed_shape = x0_unmasked_embed.shape # (B, C, H_p, W_p)
+            x0_flat = x0_unmasked_embed.flatten(2).transpose(1, 2) # (B, L, C)
+            B, L, C = x0_flat.shape
+            
+            mask_tokens = self.mask_token.expand(B, L, -1)
+            # w is (B, L, 1), where 1 = MASKED
+            w = patch_mask.flatten(1).unsqueeze(-1).type_as(mask_tokens) 
+            
+            x_token_masked_flat = x0_flat * (1.0 - w) + mask_tokens * w
+            
+            # --- 3. Reshape token-masked input for SwinViT layers ---
+            x_token_masked = x_token_masked_flat.transpose(1, 2).view(B, C, x_embed_shape[2], x_embed_shape[3])
+            
+            # --- 4. Run TRANSFORMER backbone on token-masked input ---
+            x = x_token_masked
+            x1 = self.swinViT.layers1[0](x.contiguous())
+            x1_out = self.swinViT.proj_out(x1, self.normalize)
+            
+            x2 = self.swinViT.layers2[0](x1.contiguous())
+            x2_out = self.swinViT.proj_out(x2, self.normalize)
+            
+            x3 = self.swinViT.layers3[0](x2.contiguous())
+            x3_out = self.swinViT.proj_out(x3, self.normalize)
+            
+            x4 = self.swinViT.layers4[0](x3.contiguous())
+            x4_out = self.swinViT.proj_out(x4, self.normalize)
+            
+            hidden_states_out = [None, x1_out, x2_out, x3_out, x4_out]
+            
+            # --- 5. Run the light decoder ---
+            dec4 = self.encoder10(hidden_states_out[4])
+            logits = self.light_decoder_head(dec4)
+            
+            # Return logits and the pixel_mask (for loss calculation)
+            # pixel_mask is 0.0 for masked, 1.0 for unmasked
+            return logits, pixel_mask.bool()
         
-        # --- 2. Create TOKEN-masked input for TRANSFORMER backbone ---
-        #    This uses the *original* x_in to get real embeddings,
-        #    which are then replaced by the learnable mask_token.
-        x0_unmasked_embed = self.swinViT.patch_embed(x_in)
-        x0_unmasked_embed = self.swinViT.pos_drop(x0_unmasked_embed)
-        
-        x_embed_shape = x0_unmasked_embed.shape # (B, C, H_p, W_p)
-        x0_flat = x0_unmasked_embed.flatten(2).transpose(1, 2) # (B, L, C)
-        B, L, C = x0_flat.shape
-        
-        mask_tokens = self.mask_token.expand(B, L, -1)
-        # w is (B, L, 1), where 1 = MASKED
-        w = patch_mask.flatten(1).unsqueeze(-1).type_as(mask_tokens) 
-        
-        x_token_masked_flat = x0_flat * (1.0 - w) + mask_tokens * w
-        
-        # --- 3. Reshape token-masked input for SwinViT layers ---
-        x_token_masked = x_token_masked_flat.transpose(1, 2).view(B, C, x_embed_shape[2], x_embed_shape[3])
-        
-        # --- 4. Run TRANSFORMER backbone on token-masked input ---
-        x = x_token_masked
-        x1 = self.swinViT.layers1[0](x.contiguous())
-        x1_out = self.swinViT.proj_out(x1, self.normalize)
-        
-        x2 = self.swinViT.layers2[0](x1.contiguous())
-        x2_out = self.swinViT.proj_out(x2, self.normalize)
-        
-        x3 = self.swinViT.layers3[0](x2.contiguous())
-        x3_out = self.swinViT.proj_out(x3, self.normalize)
-        
-        x4 = self.swinViT.layers4[0](x3.contiguous())
-        x4_out = self.swinViT.proj_out(x4, self.normalize)
-        
-        hidden_states_out = [None, x1_out, x2_out, x3_out, x4_out]
-        
-        # --- 5. Run the light decoder ---
-        dec4 = self.encoder10(hidden_states_out[4])
-        logits = self.light_decoder_head(dec4)
-        
-        # Return logits and the pixel_mask (for loss calculation)
-        # pixel_mask is 0.0 for masked, 1.0 for unmasked
-        return logits, pixel_mask.bool()
-    
-    else:
-        # --- FINE-TUNING MODE: No masking, standard forward pass ---
-        # Run the full SwinUNETR forward pass without any masking
-        hidden_states_out = self.swinViT(x_in, self.normalize)
-        
-        # Process skip connections (no masking needed)
-        enc0 = self.encoder1(x_in)
-        enc1 = self.encoder2(hidden_states_out[0])
-        enc2 = self.encoder3(hidden_states_out[1])
-        enc3 = self.encoder4(hidden_states_out[2])
-        dec4 = self.encoder10(hidden_states_out[4])
-        
-        # Run the U-Net decoder
-        dec3 = self.decoder5(dec4, hidden_states_out[3])
-        dec2 = self.decoder4(dec3, enc3)
-        dec1 = self.decoder3(dec2, enc2)
-        dec0 = self.decoder2(dec1, enc1)
-        out = self.decoder1(dec0, enc0)
-        logits = self.out(out)
-        
-        # Return logits only (no mask needed for fine-tuning)
-        return logits
+        else:
+            # --- FINE-TUNING MODE: No masking, standard forward pass ---
+            # Run the full SwinUNETR forward pass without any masking
+            hidden_states_out = self.swinViT(x_in, self.normalize)
+            
+            # Process skip connections (no masking needed)
+            enc0 = self.encoder1(x_in)
+            enc1 = self.encoder2(hidden_states_out[0])
+            enc2 = self.encoder3(hidden_states_out[1])
+            enc3 = self.encoder4(hidden_states_out[2])
+            dec4 = self.encoder10(hidden_states_out[4])
+            
+            # Run the U-Net decoder
+            dec3 = self.decoder5(dec4, hidden_states_out[3])
+            dec2 = self.decoder4(dec3, enc3)
+            dec1 = self.decoder3(dec2, enc2)
+            dec0 = self.decoder2(dec1, enc1)
+            out = self.decoder1(dec0, enc0)
+            logits = self.out(out)
+            
+            # Return logits only (no mask needed for fine-tuning)
+            return logits

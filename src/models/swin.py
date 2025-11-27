@@ -73,7 +73,7 @@ class SwinUNetrWrapper(pl.LightningModule):
         return opt
     
         
-    def forward(self, x, mask):
+    def forward(self, x, patch_mask):
         """
         Forward pass that handles both pre-training and fine-tuning modes.
         
@@ -82,10 +82,10 @@ class SwinUNetrWrapper(pl.LightningModule):
             mask_bool: Mask tensor (None for fine-tuning)
         """
         if self.use_light_decoder:
-            x_rec, mask_bool = self(x, mask)
+            x_rec, mask_bool = self.swin_unetr(x.contiguous(), patch_mask.contiguous())
             return x_rec, mask_bool
         else:
-            x_rec = self(x, mask=None)
+            x_rec = self.swin_unetr(x.contiguous(), patch_mask=None)
             return x_rec, None
     
 

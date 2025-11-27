@@ -296,6 +296,7 @@ def main(args):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
         
     if args.use_light_decoder:
+            
         # Load data
         train_loader = torch.utils.data.DataLoader(
             Era5CropDataset(
@@ -324,26 +325,43 @@ def main(args):
         )
         
     else:
-        # Load data
-        train_loader = torch.utils.data.DataLoader(
-            CerraEra5SuperResDataset(
+        
+        regions = ["Iberia", "Scandinavia", "CentralEurope"]
+        # Ensure these lists are initialized before the loop
+        train_dataset_list = []
+        val_dataset_list = []
+
+        for region in regions:
+            # Load data
+            dataset_region_train = CerraEra5SuperResDataset(
                 args.dataset_cerra,
                 args.dataset_era5,
-                region="Iberia",
+                region=region,
                 split="train",
-            ),
+            )
+            
+            dataset_region_val = CerraEra5SuperResDataset(
+                args.dataset_cerra,
+                args.dataset_era5,
+                region=region,
+                split="val",
+            )
+            
+            train_dataset_list.append(dataset_region_train)
+            val_dataset_list.append(dataset_region_val)
+            
+        train_dataset = torch.utils.data.ConcatDataset(train_dataset_list)
+        val_dataset = torch.utils.data.ConcatDataset(val_dataset_list)
+        
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
             args.batch_size,
             shuffle=True,
             num_workers=args.n_workers,
         )
         
         val_loader = torch.utils.data.DataLoader(
-            CerraEra5SuperResDataset(
-                args.dataset_cerra,
-                args.dataset_era5,
-                region="Iberia",
-                split="validation",
-            ),
+            val_dataset,
             args.batch_size,
             shuffle=False,
             num_workers=args.n_workers,
