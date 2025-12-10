@@ -90,11 +90,17 @@ class SwinUNetrWrapper(pl.LightningModule):
     
 
     def training_step(self, batch, batch_idx):
-        x, mask = batch 
-        x = self._upsample(x)
-        
-        x_rec, mask_bool = self.forward(x, mask)
-        loss = self.get_loss(x, x_rec, mask_bool)
+        if self.use_light_decoder:
+            x, mask = batch 
+            x = self._upsample(x)
+            x_rec, mask_bool = self.forward(x, patch_mask=mask)
+            target = None
+            
+        else:
+            x, target = batch 
+            x_rec, mask_bool = self.forward(x, patch_mask=None)
+            
+        loss = self.get_loss(x, x_rec, target, mask_bool)
         
         train_log_dict = {
             "train_loss": loss,
@@ -106,11 +112,17 @@ class SwinUNetrWrapper(pl.LightningModule):
     
 
     def validation_step(self, batch, batch_idx):
-        x, mask = batch 
-        x = self._upsample(x)
-        
-        x_rec, mask_bool = self.forward(x, mask)
-        loss = self.get_loss(x, x_rec, mask_bool)
+        if self.use_light_decoder:
+            x, mask = batch 
+            x = self._upsample(x)
+            x_rec, mask_bool = self.forward(x, patch_mask=mask)
+            target = None
+            
+        else:
+            x, target = batch 
+            x_rec, mask_bool = self.forward(x, patch_mask=None)
+            
+        loss = self.get_loss(x, x_rec, target, mask_bool)
         
         val_log_dict = {
             "val_loss": loss,
@@ -128,7 +140,7 @@ class SwinUNetrWrapper(pl.LightningModule):
             self.load_metrics_and_plots(x_rec, x, batch_idx, mask=None)
             
             
-    def get_loss(self, x, x_rec, mask_bool=None):
+    def get_loss(self, x, x_rec, target, mask_bool):
         """
         Compute loss based on the training mode.
         
@@ -150,7 +162,7 @@ class SwinUNetrWrapper(pl.LightningModule):
             
         else:
             # Fine-tuning: compute loss on entire input (no masking)
-            loss = F.mse_loss(x_rec, x)
+            loss = F.mse_loss(target, x_rec)
         
         return loss
     
@@ -212,4 +224,37 @@ class SwinUNetrWrapper(pl.LightningModule):
                 size=target_size,
                 mode='bicubic',
                 align_corners=False
-            )                                                     
+            )
+    
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path, map_location=None, hparams_file=None, strict=True, **kwargs):
+        """
+        Load checkpoint, keeping only encoder weights when switching from pre-training to fine-tuning.
+        """
+        # Load checkpoint normally
+        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+        
+        # Get args - should be provided via kwargs['args'] from main.py
+        if 'args' not in kwargs:
+            raise ValueError("'args' must be provided when calling load_from_checkpoint")
+        
+        # Create model with provided args
+        model = cls(kwargs['args'])
+        
+        # Filter state dict: keep only swinViT and mask_token
+        state_dict = checkpoint['state_dict']
+        filtered = {k: v for k, v in state_dict.items() 
+                    if k.startswith('swin_unetr.swinViT.') or k.startswith('swin_unetr.mask_token')}
+        
+        # Load with strict=False
+        model.load_state_dict(filtered, strict=False)
+        
+        # Freeze encoder in fine-tuning mode
+        if not model.use_light_decoder:
+            for param in model.swin_unetr.swinViT.parameters():
+                param.requires_grad = False
+            model.swin_unetr.mask_token.requires_grad = False
+        
+        return model
+
+ 

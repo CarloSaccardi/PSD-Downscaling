@@ -61,10 +61,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         self.era5_vars = era5_vars
         self.cerra_vars = cerra_vars
         self.target_size = target_size
-        
-        print(f"Dataset initialized: {region} ({split})")
-        print(f"  Input: ERA5 85x85 -> Upsampled to {target_size}")
-        print(f"  Input Channels: {len(era5_vars) + 4} (Dyn+Time) + 1 (Static)")
+
 
     def __len__(self):
         return self.time_len
@@ -83,16 +80,18 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         era5_data = (era5_data - self.era5_mean[:, None, None]) / self.era5_std[:, None, None]
         cerra_target = (cerra_target - self.cerra_dyn_mean[:, None, None]) / self.cerra_dyn_std[:, None, None]
         
-        # 4. Broadcast Time Features to ERA5 (Low Res)
-        # [4, 85, 85]
-        time_channels = self._broadcast_time_features(time_feats, era5_data.shape[1], era5_data.shape[2])
+        # 4. Broadcast Time Features to ERA5 (Low Res) and CERRA (High Res)
+        # [4, 85, 85] for ERA5
+        time_channels_lr = self._broadcast_time_features(time_feats, era5_data.shape[1], era5_data.shape[2])
+        time_channels_hr = self._broadcast_time_features(time_feats, cerra_target.shape[1], cerra_target.shape[2])
         
-        # 5. Concatenate ERA5 + Time
-        # [C_era5 + 4, 85, 85]
-        lr_combined = np.concatenate([era5_data, time_channels], axis=0)
+        # 5. Concatenate ERA5 + Time (Low Res)
+        lr_combined = np.concatenate([era5_data, time_channels_lr], axis=0)
+        hr_combined = np.concatenate([cerra_target, time_channels_hr], axis=0)
         
         # 6. Convert to Tensor for Interpolation
         lr_tensor = torch.from_numpy(lr_combined).float()
+        hr_tensor = torch.from_numpy(hr_combined).float()
         
         # 7. --- UPSAMPLING (The key step) ---
         # Interpolate requires [Batch, Channels, H, W], so we unsqueeze(0)
@@ -106,16 +105,14 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         
         # 8. Prepare Static Forcing (Already 384x384 and Normalized in __init__)
         # [1, 384, 384]
-        hr_forcing = torch.from_numpy(self.cerra_orography[None, :, :]).float()
+        hr_forcing = torch.from_numpy(self.cerra_orography[None, :, :]).float().squeeze(0) #remove first dimension
         
         # 9. Concatenate Upsampled Input + Static Forcing
         # Input: [C_era5 + 4 + 1, 384, 384]
         full_input = torch.cat([hr_upsampled, hr_forcing], dim=0)
+        full_target = torch.cat([hr_tensor, hr_forcing], dim=0)
         
-        # Target: [C_cerra, 384, 384]
-        target_tensor = torch.from_numpy(cerra_target).float()
-        
-        return full_input, target_tensor
+        return full_input, full_target
 
     # --- Helper Functions (Same as before) ---
 
