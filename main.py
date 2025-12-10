@@ -201,6 +201,16 @@ def get_args():
         default=32,
         help="Patch size for masking (default: 16)",
     )
+    parser.add_argument(
+        "--freeze_encoder",
+        default=True,
+        help="Freeze encoder parameters when loading pre-trained weights (default: True). Set via config file.",
+    )
+    parser.add_argument(
+        "--use_light_decoder",
+        default=False,
+        help="Use light decoder for pre-training (default: False). Set via config file.",
+    )
     return parser.parse_args()
 
 def main(args):

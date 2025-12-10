@@ -10,13 +10,14 @@ class SimMIMSwinUNETR(SwinUNETR):
     using a hybrid masking strategy to prevent information leaks 
     from convolutional skip connections.
     """
-    def __init__(self, use_light_decoder: bool = False, **kwargs):
+    def __init__(self, use_light_decoder: bool = False, freeze_encoder: bool = True, **kwargs):
         # Enforce spatial_dims=2
         if "spatial_dims" in kwargs and kwargs["spatial_dims"] != 2:
             raise ValueError("SimMIMSwinUNETR_2D is only for spatial_dims=2.")
         kwargs["spatial_dims"] = 2
         kwargs["use_v2"] = False
         self.use_light_decoder = use_light_decoder
+        self.freeze_encoder = freeze_encoder
         
         super().__init__(**kwargs)
         
@@ -53,13 +54,14 @@ class SimMIMSwinUNETR(SwinUNETR):
             
             
         else:
-            # Fine-tuning stage: Freeze the pre-trained Swin Transformer backbone
-            # Freeze all parameters in the Swin Transformer
-            for param in self.swinViT.parameters():
-                param.requires_grad = False
-            
-            # Freeze the mask token (learned during pre-training)
-            self.mask_token.requires_grad = False
+            # Fine-tuning stage: Conditionally freeze the pre-trained Swin Transformer backbone
+            if self.freeze_encoder:
+                # Freeze all parameters in the Swin Transformer
+                for param in self.swinViT.parameters():
+                    param.requires_grad = False
+                
+                # Freeze the mask token (learned during pre-training)
+                self.mask_token.requires_grad = False
 
     def forward(self, x_in, patch_mask):
         """

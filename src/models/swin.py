@@ -41,6 +41,7 @@ class SwinUNetrWrapper(pl.LightningModule):
         # Use the original SwinUNETR architecture
         self.swin_unetr = SimMIMSwinUNETR(
             use_light_decoder=args.use_light_decoder,
+            freeze_encoder=args.freeze_encoder,
             in_channels=args.img_in_channels,
             out_channels=args.img_out_channels,  # Reconstruction: output same as input
             patch_size=2,
@@ -249,11 +250,18 @@ class SwinUNetrWrapper(pl.LightningModule):
         # Load with strict=False
         model.load_state_dict(filtered, strict=False)
         
-        # Freeze encoder in fine-tuning mode
+        # Handle encoder freezing/unfreezing in fine-tuning mode
         if not model.use_light_decoder:
-            for param in model.swin_unetr.swinViT.parameters():
-                param.requires_grad = False
-            model.swin_unetr.mask_token.requires_grad = False
+            if kwargs['args'].freeze_encoder:
+                # Freeze encoder parameters
+                for param in model.swin_unetr.swinViT.parameters():
+                    param.requires_grad = False
+                model.swin_unetr.mask_token.requires_grad = False
+            else:
+                
+                for param in model.swin_unetr.swinViT.parameters():
+                    param.requires_grad = True
+                model.swin_unetr.mask_token.requires_grad = False
         
         return model
 
