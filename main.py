@@ -214,7 +214,8 @@ def main(args):
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
-    devices = len(os.environ["CUDA_VISIBLE_DEVICES"].split(","))
+    num_nodes = int(os.environ.get("SLURM_NNODES", 1))
+    devices = torch.cuda.device_count()
     print(f"Using {devices} GPUs")
 
     # Set seed
@@ -282,6 +283,7 @@ def main(args):
         strategy=strategy,
         accelerator=device_name,
         devices=devices,
+        num_nodes=num_nodes,
         logger=logger,
         log_every_n_steps=1,
         callbacks=callbacks,
