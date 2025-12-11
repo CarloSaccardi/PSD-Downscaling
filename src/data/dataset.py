@@ -44,12 +44,12 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         self.cerra_stat_std = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_std.npy"))
 
         # 2. Open Datasets (Lazy Xarray)
-        self.era5_dyn_ds = xr.open_dataset(era5_dyn_path) 
-        self.cerra_dyn_ds = xr.open_dataset(cerra_dyn_path)
+        self.era5_dyn_ds = xr.open_dataset(era5_dyn_path, engine="h5netcdf") 
+        self.cerra_dyn_ds = xr.open_dataset(cerra_dyn_path, engine="h5netcdf")
         
         # 3. Load Static Data into RAM (Optimization)
         # We perform the static normalization ONCE here to save CPU cycles in __getitem__
-        ds_static = xr.open_dataset(cerra_stat_path)
+        ds_static = xr.open_dataset(cerra_stat_path, engine="h5netcdf")
         raw_static = ds_static['orog'].values.astype(np.float32)
         self.cerra_orography = (raw_static - self.cerra_stat_mean) / self.cerra_stat_std
         ds_static.close()
