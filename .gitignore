@@ -80,7 +80,7 @@ tags
 figures/*
 *.out
 
-yaml_configs/Swin/pretraining/*
+yaml_configs/*
 DebugLogs/*
 
 bash_files/*
