@@ -11,7 +11,7 @@ from lightning_fabric.utilities import seed
 # First-party
 from src import constants, utils
 from src.models import UNetWrapper, DiffusionWrapper
-from src.data import ERA5toCERRA2
+from src.data import ERA5toCERRA2, CerraEra5SuperResDataset
 import os
 import yaml
 
@@ -435,36 +435,54 @@ def main(args):
         print(f"Running evaluation on {config.eval}")
         trainer.test(model=model, dataloaders=eval_loader)
     else:
-        # Load data
-        train_loader = torch.utils.data.DataLoader(
-            ERA5toCERRA2(
-                config.dataset.cerra_path,
-                config.dataset.era5_path,
+        
+        regions = ["Iberia", "Scandinavia", "CentralEurope"]
+        # Ensure these lists are initialized before the loop
+        train_dataset_list = []
+        val_dataset_list = []
+
+        for region in regions:
+            # Load data
+            dataset_region_train = CerraEra5SuperResDataset(
+                args.dataset_cerra,
+                args.dataset_era5,
+                region=region,
                 split="train",
-                subset=bool(config.dataset.subset_size),
-            ),
-            config.training.batch_size,
+            )
+            
+            dataset_region_val = CerraEra5SuperResDataset(
+                args.dataset_cerra,
+                args.dataset_era5,
+                region=region,
+                split="val",
+            )
+            
+            train_dataset_list.append(dataset_region_train)
+            val_dataset_list.append(dataset_region_val)
+            
+        train_dataset = torch.utils.data.ConcatDataset(train_dataset_list)
+        val_dataset = torch.utils.data.ConcatDataset(val_dataset_list)
+        
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            args.batch_size,
             shuffle=True,
-            num_workers=config.training.n_workers,
+            num_workers=args.n_workers,
         )
         
         val_loader = torch.utils.data.DataLoader(
-            ERA5toCERRA2(
-                config.dataset.cerra_path,
-                config.dataset.era5_path,
-                split="val",
-                subset=bool(config.dataset.subset_size),
-            ),
-            config.training.batch_size,
+            val_dataset,
+            args.batch_size,
             shuffle=False,
-            num_workers=config.training.n_workers,
+            num_workers=args.n_workers,
         )
-        # Train model
+        
         trainer.fit(
             model=model,
             train_dataloaders=train_loader,
             val_dataloaders=val_loader,
-            ckpt_path=config.resume if config.resume else None,
+            ckpt_path= args.resume if args.resume else None,
+            
         )
 
 

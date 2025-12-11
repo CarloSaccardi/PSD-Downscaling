@@ -1,6 +1,6 @@
 import importlib
-from physicsnemo.physicsnemo.utils.patching import RandomPatching2D
-from physicsnemo.physicsnemo.models.diffusion import EDMPrecond
+from physicsnemo.utils.patching import RandomPatching2D
+from physicsnemo.models.diffusion import EDMPrecond
 from typing import Callable, Optional, List, Tuple, Union
 
 from torch import Tensor

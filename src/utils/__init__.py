@@ -5,8 +5,9 @@ This module contains various utility functions for data processing,
 visualization, and other common tasks.
 """
 
-# Import utilities from the original file
-from neural_lam.utils import (
+# Import utilities with an absolute package path to avoid import errors when the
+# package is imported from different working directories.
+from src.utils.utils import (
     init_wandb_metrics,
     stochastic_sampler,
     diffusion_step,

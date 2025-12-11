@@ -4,7 +4,7 @@ import importlib
 import wandb
 import matplotlib.pyplot as plt
 from .. import constants
-from neural_lam import vis  # Keep this for now, will move later
+from ..utils import vis
 from typing import Callable, Optional, Tuple
 import random
 from torchmetrics.functional import structural_similarity_index_measure as ssim_func
@@ -15,7 +15,7 @@ import math
 
 from .losses.fourier_losses import FourierLossETH, FourierLossDelft, FourierLossHK, FourierLossCarlo
 
-network_module = importlib.import_module("physicsnemo.physicsnemo.models.diffusion")
+network_module = importlib.import_module("physicsnemo.models.diffusion")
 
 
 

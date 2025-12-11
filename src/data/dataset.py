@@ -12,79 +12,149 @@ from src import constants, utils
 
 import torch.nn.functional as F
 
-import re
-from pathlib import Path
-from typing import List, Tuple 
+import xarray as xr
+import pandas as pd
 
 
-class ERA5tCERRAStats(torch.utils.data.Dataset):
+class CerraEra5SuperResDataset(torch.utils.data.Dataset):
     """
-    Statistics-only wrapper: each item is a pair
-        (cerra, era5) with shape (C, H*W*T)
-    so that downstream code can just take a mean over dim=-1.
-    """
-
-    _file_pat = re.compile(r"^nwp_(?P<stem>.+?)\.npy$")
-
-    def __init__(
-        self,
-        root_cerra: str | Path,
-        root_era5: str | Path,
-        split: str = "train",
-        subset: int | None = None,          # <= None → full data
-    ):
-        super().__init__()
-        assert split in {"train", "val", "test"}
-
-        self.root_cerra = Path(root_cerra).expanduser()
-        self.root_era5  = Path(root_era5 ).expanduser()
-
-        self.dir_cerra = self.root_cerra / "samples" / split
-        self.dir_era5  = self.root_era5  / "samples" / split
-
-        # ---- Build the canonical list from CERRA and verify ERA5 exists
-        self.stems: List[str] = sorted(
-            m.group("stem")
-            for m in map(lambda p: self._file_pat.match(p.name),  # ← p.name is str
-                        self.dir_cerra.iterdir())
-            if m is not None
-        )
-
-        missing: List[str] = [
-            s for s in self.stems if not (self.dir_era5 / f"nwp_{s}.npy").exists()
-        ]
-        if missing:
-            raise FileNotFoundError(
-                f"{len(missing)} ERA5 files not found, e.g. {missing[:3]}"
-            )
-
-        if subset is not None:
-            self.stems = self.stems[: subset]
-
-    # --------------------------------------------------------------------- #
-    def __len__(self) -> int:
-        return len(self.stems)
-
-    # --------------------------------------------------------------------- #
-    def _load_numpy(self, path: Path) -> torch.Tensor:
-        """
-        Memory-maps a .npy file and returns a float32 tensor with shape
-        (C, T*H*W).  No copy if dtype already float32.
-        """
-        arr = np.load(path, mmap_mode="r")                  # shape (T, H, W, C′)
-        if arr.dtype != np.float32:
-            arr = arr.astype(np.float32)                    # one cheap copy
-        # Move channel to front and collapse the rest
-        arr = np.moveaxis(arr, -1, 0).reshape(arr.shape[-1], -1)
-        return torch.from_numpy(arr)
-
-    # --------------------------------------------------------------------- #
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        stem = self.stems[idx]
-        cerra = self._load_numpy(self.dir_cerra / f"nwp_{stem}.npy")
-        era5  = self._load_numpy(self.dir_era5  / f"nwp_{stem}.npy")
-        return cerra, era5
+    Super-Resolution Dataset (Upsampled ERA5 + CERRA Forcing).
     
+    Logic:
+    1. Loads Low-Res ERA5 (85x85) and Time Embeddings.
+    2. Upsamples ERA5+Time to High-Res (384x384) using Bicubic interpolation.
+    3. Concatenates with High-Res CERRA Forcing (Orography).
+    4. Returns (Full_Input, CERRA_Target).
+    """
+    def __init__(self, 
+                 root_dir_cerra,
+                 root_dir_era5,
+                 split,
+                 region,
+                 target_size=(384, 384), # Target HR dimension
+                 era5_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'], 
+                 cerra_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp']):
+        super().__init__()
+        
+        # Paths
+        era5_dyn_path = os.path.join(root_dir_era5, split, f"{region}.nc")
+        cerra_dyn_path = os.path.join(root_dir_cerra, split, f"{region}.nc")
+        cerra_stat_path = os.path.join(root_dir_cerra, split, f"static_{region}.nc")
+        
+        # 1. Load Statistics
+        self.era5_mean = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_mean.npy"))
+        self.era5_std = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_std.npy"))
+        
+        self.cerra_dyn_mean = np.load(os.path.join(root_dir_cerra, "statistics", "dynamic_mean.npy"))
+        self.cerra_dyn_std = np.load(os.path.join(root_dir_cerra, "statistics", "dynamic_std.npy"))
+        
+        self.cerra_stat_mean = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_mean.npy"))
+        self.cerra_stat_std = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_std.npy"))
+
+        # 2. Open Datasets (Lazy Xarray)
+        self.era5_dyn_ds = xr.open_dataset(era5_dyn_path, engine="h5netcdf") 
+        self.cerra_dyn_ds = xr.open_dataset(cerra_dyn_path, engine="h5netcdf")
+        
+        # 3. Load Static Data into RAM (Optimization)
+        # We perform the static normalization ONCE here to save CPU cycles in __getitem__
+        ds_static = xr.open_dataset(cerra_stat_path, engine="h5netcdf")
+        raw_static = ds_static['orog'].values.astype(np.float32)
+        self.cerra_orography = (raw_static - self.cerra_stat_mean) / self.cerra_stat_std
+        ds_static.close()
+        
+        # 4. Load Time Axis
+        self.time_axis = self.era5_dyn_ds.time.values
+        self.time_len = len(self.time_axis)
+        
+        self.era5_vars = era5_vars
+        self.cerra_vars = cerra_vars
+        self.target_size = target_size
+
+
+    def __len__(self):
+        return self.time_len
+
+    def __getitem__(self, idx):
+        # 1. Get Time Embeddings
+        time_feats = self._get_time_embedding(idx)
+        
+        # 2. Load Dynamic Data (Lazy Read)
+        # ERA5: [C_era5, 85, 85]
+        era5_data = self._load_dynamic_step(self.era5_dyn_ds, self.era5_vars, idx)
+        # CERRA Target: [C_cerra, 384, 384]
+        cerra_target = self._load_dynamic_step(self.cerra_dyn_ds, self.cerra_vars, idx)
+        
+        # 3. Normalize Dynamic Data
+        era5_data = (era5_data - self.era5_mean[:, None, None]) / self.era5_std[:, None, None]
+        cerra_target = (cerra_target - self.cerra_dyn_mean[:, None, None]) / self.cerra_dyn_std[:, None, None]
+        
+        # 4. Broadcast Time Features to ERA5 (Low Res) and CERRA (High Res)
+        # [4, 85, 85] for ERA5
+        time_channels_lr = self._broadcast_time_features(time_feats, era5_data.shape[1], era5_data.shape[2])
+        time_channels_hr = self._broadcast_time_features(time_feats, cerra_target.shape[1], cerra_target.shape[2])
+        
+        # 5. Concatenate ERA5 + Time (Low Res)
+        lr_combined = np.concatenate([era5_data, time_channels_lr], axis=0)
+        hr_combined = np.concatenate([cerra_target, time_channels_hr], axis=0)
+        
+        # 6. Convert to Tensor for Interpolation
+        lr_tensor = torch.from_numpy(lr_combined).float()
+        hr_tensor = torch.from_numpy(hr_combined).float()
+        
+        # 7. --- UPSAMPLING (The key step) ---
+        # Interpolate requires [Batch, Channels, H, W], so we unsqueeze(0)
+        # Result: [1, C, 384, 384]
+        hr_upsampled = F.interpolate(
+            lr_tensor.unsqueeze(0), 
+            size=self.target_size, 
+            mode='bicubic', 
+            align_corners=False
+        ).squeeze(0) # Remove batch dim -> [C, 384, 384]
+        
+        # 8. Prepare Static Forcing (Already 384x384 and Normalized in __init__)
+        # [1, 384, 384]
+        hr_forcing = torch.from_numpy(self.cerra_orography[None, :, :]).float().squeeze(0) #remove first dimension
+        
+        # 9. Concatenate Upsampled Input + Static Forcing
+        # Input: [C_era5 + 4 + 1, 384, 384]
+        full_input = torch.cat([hr_upsampled, hr_forcing], dim=0)
+        full_target = torch.cat([hr_tensor, hr_forcing], dim=0)
+        
+        return full_input, full_target
+
+    # --- Helper Functions (Same as before) ---
+
+    def _load_dynamic_step(self, dataset, variables, idx):
+        """Lazy load specific time step."""
+        data_sel = dataset[variables].isel(time=idx)
+        return data_sel.to_array().values.astype(np.float32)
+
+    def _get_time_embedding(self, idx):
+        """Computes 4 time embedding features."""
+        datetime = self.time_axis[idx]
+        dt_obj = pd.to_datetime(datetime)
+        day_of_year = dt_obj.dayofyear
+        hour = dt_obj.hour
+        
+        day_norm = 2 * np.pi * day_of_year / 365.25
+        hour_norm = 2 * np.pi * hour / 24.0
+
+        return [
+            (np.sin(day_norm) + 1) / 2,
+            (np.cos(day_norm) + 1) / 2,
+            (np.sin(hour_norm) + 1) / 2,
+            (np.cos(hour_norm) + 1) / 2
+        ]
+
+    def _broadcast_time_features(self, time_features, height, width):
+        time_channels = np.zeros((4, height, width), dtype=np.float32)
+        for i, val in enumerate(time_features):
+            time_channels[i, :, :] = val
+        return time_channels
+    
+    def close(self):
+        if self.era5_dyn_ds: self.era5_dyn_ds.close()
+        if self.cerra_dyn_ds: self.cerra_dyn_ds.close()
     
     
 class ERA5toCERRA2(torch.utils.data.Dataset):
