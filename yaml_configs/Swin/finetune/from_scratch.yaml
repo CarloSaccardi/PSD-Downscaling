@@ -1,8 +1,8 @@
 # =========================
 # GENERAL OPTIONS
 # =========================
-dataset_cerra: "/aspire/CarloData/CERRA-ERA5-processing/zz_processed_data/CERRA"
-dataset_era5: "/aspire/CarloData/CERRA-ERA5-processing/zz_processed_data/ERA5"
+dataset_cerra: "/projects/0/prjs0951/Carlo/zz_processed_data/CERRA"
+dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/ERA5"
 model: Swin-Unetr                  # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
@@ -12,7 +12,7 @@ resume: null
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
-wandb_project: null                #UNet-Cnn               # Optional wandb project name
+wandb_project: finetune                #UNet-Cnn               # Optional wandb project name
 run_name: Swin-FromScratch               # Optional run name
 
 # =========================
@@ -46,8 +46,8 @@ model_type: SwinUNETR
 # =========================
 val_interval: 1
 lr: 2.0e-4
-epochs: 1000
-batch_size: 2
+epochs: 5000
+batch_size: 64
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null          # Set a number to enable clipping
