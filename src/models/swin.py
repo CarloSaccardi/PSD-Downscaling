@@ -118,10 +118,12 @@ class SwinUNetrWrapper(pl.LightningModule):
             x = self._upsample(x)
             x_rec, mask_bool = self.forward(x, patch_mask=mask)
             target = None
+            ground_truth = x
             
         else:
             x, target = batch 
             x_rec, mask_bool = self.forward(x, patch_mask=None)
+            ground_truth = target
             
         loss = self.get_loss(x, x_rec, target, mask_bool)
         
@@ -138,7 +140,7 @@ class SwinUNetrWrapper(pl.LightningModule):
             and self.current_epoch % 10 == 0
             and self.wandb_project is not None
         ):
-            self.load_metrics_and_plots(x_rec, x, batch_idx, mask=None)
+            self.load_metrics_and_plots(x_rec, ground_truth, batch_idx, mask=None)
             
             
     def get_loss(self, x, x_rec, target, mask_bool):
