@@ -91,15 +91,12 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         # 4. Broadcast Time Features to ERA5 (Low Res) and CERRA (High Res)
         # [4, 85, 85] for ERA5
         time_channels_lr = self._broadcast_time_features(time_feats, era5_data.shape[1], era5_data.shape[2])
-        time_channels_hr = self._broadcast_time_features(time_feats, cerra_target.shape[1], cerra_target.shape[2])
         
         # 5. Concatenate ERA5 + Time (Low Res)
         lr_combined = np.concatenate([era5_data, time_channels_lr], axis=0)
-        hr_combined = np.concatenate([cerra_target, time_channels_hr], axis=0)
         
         # 6. Convert to Tensor for Interpolation
         lr_tensor = torch.from_numpy(lr_combined).float()
-        hr_tensor = torch.from_numpy(hr_combined).float()
         
         # 7. --- UPSAMPLING (The key step) ---
         # Interpolate requires [Batch, Channels, H, W], so we unsqueeze(0)
@@ -118,9 +115,8 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         # 9. Concatenate Upsampled Input + Static Forcing
         # Input: [C_era5 + 4 + 1, 384, 384]
         full_input = torch.cat([hr_upsampled, hr_forcing], dim=0)
-        full_target = torch.cat([hr_tensor, hr_forcing], dim=0)
         
-        return full_target, full_input
+        return cerra_target, full_input
 
     # --- Helper Functions (Same as before) ---
 
