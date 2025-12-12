@@ -338,7 +338,8 @@ def main(args):
         
     else:
         
-        regions = ["Iberia", "Scandinavia", "CentralEurope"]
+        # regions = ["Iberia", "Scandinavia", "CentralEurope"]
+        regions = ["CentralEurope"]
         # Ensure these lists are initialized before the loop
         train_dataset_list = []
         val_dataset_list = []
