@@ -120,7 +120,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         full_input = torch.cat([hr_upsampled, hr_forcing], dim=0)
         full_target = torch.cat([hr_tensor, hr_forcing], dim=0)
         
-        return full_input, full_target
+        return full_target, full_input
 
     # --- Helper Functions (Same as before) ---
 
