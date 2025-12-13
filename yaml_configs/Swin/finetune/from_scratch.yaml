@@ -47,7 +47,7 @@ model_type: SwinUNETR
 val_interval: 1
 lr: 2.0e-4
 epochs: 300
-batch_size: 64
+batch_size: 16
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null          # Set a number to enable clipping
