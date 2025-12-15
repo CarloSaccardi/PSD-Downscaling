@@ -345,9 +345,9 @@ def main(args):
     # Instantiate model + trainer
     if torch.cuda.is_available():
         device_name = "cuda"
-        #torch.set_float32_matmul_precision(
-        #    "high"
-        #)  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision(
+           "high"
+        )  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 
@@ -414,7 +414,7 @@ def main(args):
         callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
-        accumulate_grad_batches=4
+        # accumulate_grad_batches=4
         #profiler="simple",
     )
 
