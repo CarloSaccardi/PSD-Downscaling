@@ -335,7 +335,8 @@ def main(args):
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
-    devices = len(os.environ["CUDA_VISIBLE_DEVICES"].split(","))
+    num_nodes = int(os.environ.get("SLURM_NNODES", 1))
+    devices = torch.cuda.device_count()
     print(f"Using {devices} GPUs")
 
     # Set seed
@@ -402,16 +403,18 @@ def main(args):
     strategy = "ddp"
 
     trainer = pl.Trainer(
-        max_epochs=config.training.epochs,
+        max_epochs=args.epochs,
         deterministic=True,
         strategy=strategy,
         accelerator=device_name,
-        #devices=devices,
+        devices=devices,
+        num_nodes=num_nodes,
         logger=logger,
         log_every_n_steps=1,
         callbacks=callbacks,
-        check_val_every_n_epoch=config.training.val_interval,
-        precision=config.training.precision,
+        check_val_every_n_epoch=args.val_interval,
+        precision=args.precision,
+        accumulate_grad_batches=4
         #profiler="simple",
     )
 
