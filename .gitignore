@@ -89,4 +89,3 @@ configs/*
 *.err
 
 plot_tests/*
-yaml_configs/*
