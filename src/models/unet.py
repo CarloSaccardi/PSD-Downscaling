@@ -120,7 +120,7 @@ class UNetWrapper(pl.LightningModule):
 
     def training_step(self, batch, *args):
         batch_size = batch[0].shape[0]
-        img_clean, img_lr, *rest = batch
+        img_lr, img_clean, *rest = batch
         img_clean = img_clean.float()
         img_lr = img_lr.float()
         loss, _, _, loss_space, loss_amp = self.loss_fn(
@@ -131,9 +131,7 @@ class UNetWrapper(pl.LightningModule):
                         )
         
         log_dict = {
-            "train_loss": loss,
-            "train_loss_mse": loss_space,
-            "train_loss_psd": loss_amp,
+            "train_loss_epoch": loss,
         }
         self.log_dict(
             log_dict, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True
@@ -142,7 +140,7 @@ class UNetWrapper(pl.LightningModule):
 
     def validation_step(self, batch, *args):
         batch_size = batch[0].shape[0]
-        img_clean, img_lr = batch
+        img_lr, img_clean = batch
         img_clean = img_clean.float()
         img_lr = img_lr.float()
         val_loss, ground_truth, predictions, loss_space, loss_amp = self.loss_fn(
@@ -155,8 +153,6 @@ class UNetWrapper(pl.LightningModule):
         # Log loss per time step forward and mean
         val_log_dict = {
             "val_loss": val_loss,
-            "val_loss_mse": loss_space,
-            "val_loss_psd": loss_amp,
         }
         self.log_dict(
             val_log_dict, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True
@@ -184,7 +180,7 @@ class UNetWrapper(pl.LightningModule):
         # img_lr:    (B, C, H, W)
         # diz_stats: dict with keys "mean_CERRA", "std_CERRA", "mean_era5", "std_era5"
         # img_lr_name: tuple of length B, each entry is a string (base name for saving)
-        img_clean, img_lr, diz_stats, img_lr_name = batch
+        img_lr, img_clean, diz_stats, img_lr_name = batch
 
         batch_size = img_clean.shape[0]
         img_clean = img_clean.float()
