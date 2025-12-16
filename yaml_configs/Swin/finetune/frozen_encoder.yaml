@@ -20,7 +20,7 @@ run_name: Swin-FineTune-Debug               # Optional run name
 # =========================
 output_variables: null             # List of vars to predict
 img_in_channels: 11
-img_out_channels: 11
+img_out_channels: 6
 img_resolution: [384, 384]
 
 # =========================
