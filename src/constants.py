@@ -84,7 +84,8 @@ PARAM_NAMES_SHORT_CERRA = [
     "v_wind",
     "t2m",
     "sshf",
-    "zust"
+    "zust",
+    "sp"
 ]
 
 PARAM_UNITS_CERRA = [
@@ -93,6 +94,7 @@ PARAM_UNITS_CERRA = [
     "K",
     "W/m²",
     "m/s", 
+    "Pa",
 ]
 
 # Projection and grid

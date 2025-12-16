@@ -33,12 +33,12 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         cerra_stat_path = os.path.join(root_dir_cerra, split, f"static_{region}.nc")
         
         # Load Statistics (Keep as is)
-        self.era5_mean = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_mean.npy"))
-        self.era5_std = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_std.npy"))
-        self.cerra_dyn_mean = np.load(os.path.join(root_dir_cerra, "statistics", "dynamic_mean.npy"))
-        self.cerra_dyn_std = np.load(os.path.join(root_dir_cerra, "statistics", "dynamic_std.npy"))
-        self.cerra_stat_mean = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_mean.npy"))
-        self.cerra_stat_std = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_std.npy"))
+        self.era5_mean = np.load(os.path.join(root_dir_era5, "statistics_central_europe", "dynamic_mean.npy"))#statistics_central_europe
+        self.era5_std = np.load(os.path.join(root_dir_era5, "statistics_central_europe", "dynamic_std.npy"))
+        self.cerra_dyn_mean = np.load(os.path.join(root_dir_cerra, "statistics_central_europe", "dynamic_mean.npy"))
+        self.cerra_dyn_std = np.load(os.path.join(root_dir_cerra, "statistics_central_europe", "dynamic_std.npy"))
+        self.cerra_stat_mean = np.load(os.path.join(root_dir_cerra, "statistics_central_europe", "forcing_mean.npy"))
+        self.cerra_stat_std = np.load(os.path.join(root_dir_cerra, "statistics_central_europe", "forcing_std.npy"))
 
         # --- CHANGE 2: Initialize Worker Handles as None ---
         self.era5_dyn_ds = None
