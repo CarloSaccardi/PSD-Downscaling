@@ -1,26 +1,24 @@
-# =========================
-# GENERAL OPTIONS
-# =========================
-dataset_cerra: "/projects/0/prjs0951/Carlo/zz_processed_data/CERRA"
-dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/ERA5"
+
+dataset_cerra: "/projects/0/prjs0951/Carlo/NeurIPS-workshop/CentralEurope_2014_2020/CERRA"
+dataset_era5: "/projects/0/prjs0951/Carlo/NeurIPS-workshop/CentralEurope_2014_2020/ERA5"
 model: UNet-CNN                   # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
-n_workers: 16                      # Dataloader workers
+n_workers: 8                       # Dataloader workers
 load: null
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
-wandb_project: UNet-Cnn-psdLoss
-run_name: UNet-CNN        # Optional run name
+wandb_project: UNet-Cnn-psdLoss               # Optional wandb project name
+run_name: UNet-CNN-baseline        # Optional run name
 
 # =========================
 # DATASET SETTINGS
 # =========================
 output_variables: null             # List of vars to predict
-img_in_channels: 11
-img_out_channels: 6
-img_resolution: [384, 384]
+img_in_channels: 15
+img_out_channels: 5
+img_resolution: [368, 368]
 
 # =========================
 # MODEL SETTINGS
@@ -37,7 +35,7 @@ model_type: SongUNetPosEmbd
 # =========================
 val_interval: 1
 lr: 2.0e-4
-epochs: 300
+epochs: 200
 batch_size: 16
 lr_decay: 1
 lr_rampup: 0

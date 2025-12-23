@@ -120,7 +120,7 @@ class UNetWrapper(pl.LightningModule):
 
     def training_step(self, batch, *args):
         batch_size = batch[0].shape[0]
-        img_lr, img_clean, *rest = batch
+        img_clean, img_lr, *rest = batch
         img_clean = img_clean.float()
         img_lr = img_lr.float()
         loss, _, _, loss_space, loss_amp = self.loss_fn(
@@ -140,7 +140,7 @@ class UNetWrapper(pl.LightningModule):
 
     def validation_step(self, batch, *args):
         batch_size = batch[0].shape[0]
-        img_lr, img_clean = batch
+        img_clean, img_lr, *rest = batch
         img_clean = img_clean.float()
         img_lr = img_lr.float()
         val_loss, ground_truth, predictions, loss_space, loss_amp = self.loss_fn(
@@ -180,7 +180,7 @@ class UNetWrapper(pl.LightningModule):
         # img_lr:    (B, C, H, W)
         # diz_stats: dict with keys "mean_CERRA", "std_CERRA", "mean_era5", "std_era5"
         # img_lr_name: tuple of length B, each entry is a string (base name for saving)
-        img_lr, img_clean, diz_stats, img_lr_name = batch
+        img_clean, img_lr, diz_stats, img_lr_name = batch
 
         batch_size = img_clean.shape[0]
         img_clean = img_clean.float()

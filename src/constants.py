@@ -99,8 +99,8 @@ PARAM_UNITS_CERRA = [
 
 # Projection and grid
 # Hard coded for now, but should eventually be part of dataset desc. files
-GRID_SHAPE_CERRA = (384, 384)  # (y, x)
-GRID_SHAPE_ERA5 = (85, 85)  # (y, x)
+GRID_SHAPE_CERRA = (384, 384)
+GRID_SHAPE_ERA5 = (85,85)
 
 # LAMBERT_PROJ_PARAMS = {
 #     "a": 6367470,

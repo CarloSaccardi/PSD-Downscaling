@@ -439,8 +439,7 @@ def main(args):
         trainer.test(model=model, dataloaders=eval_loader)
     else:
         
-        # regions = ["Iberia", "Scandinavia", "CentralEurope"]
-        regions = ["CentralEurope"]
+        regions = ["Iberia", "Scandinavia", "CentralEurope"]
         # Ensure these lists are initialized before the loop
         train_dataset_list = []
         val_dataset_list = []
@@ -488,6 +487,39 @@ def main(args):
             ckpt_path= args.resume if args.resume else None,
             
         )
+        
+        
+        # Load data
+        # train_loader = torch.utils.data.DataLoader(
+        #     ERA5toCERRA2(
+        #         config.dataset.cerra_path,
+        #         config.dataset.era5_path,
+        #         split="train",
+        #         subset=bool(config.dataset.subset_size),
+        #     ),
+        #     config.training.batch_size,
+        #     shuffle=True,
+        #     num_workers=config.training.n_workers,
+        # )
+        
+        # val_loader = torch.utils.data.DataLoader(
+        #     ERA5toCERRA2(
+        #         config.dataset.cerra_path,
+        #         config.dataset.era5_path,
+        #         split="val",
+        #         subset=bool(config.dataset.subset_size),
+        #     ),
+        #     config.training.batch_size,
+        #     shuffle=False,
+        #     num_workers=config.training.n_workers,
+        # )
+        # # Train model
+        # trainer.fit(
+        #     model=model,
+        #     train_dataloaders=train_loader,
+        #     val_dataloaders=val_loader,
+        #     ckpt_path=config.resume if config.resume else None,
+        # )
 
 
 def update_args(args, config_dict):
