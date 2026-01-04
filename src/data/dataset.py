@@ -67,7 +67,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         # --- CHANGE 4: Lazy Loading (The "Worker Trick") ---
         # Check if this specific worker has opened the file yet
         if self.era5_dyn_ds is None:
-            self.era5_dyn_ds = xr.open_dataset(self.era5_dyn_path, cache=False)
+            self.era5_dyn_ds = xr.open_dataset(self.era5_dyn_path, cache=False).sortby('latitude')
             
         if self.cerra_dyn_ds is None:
             self.cerra_dyn_ds = xr.open_dataset(self.cerra_dyn_path, cache=False)
