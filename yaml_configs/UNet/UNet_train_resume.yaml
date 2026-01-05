@@ -1,8 +1,8 @@
 # =========================
 # GENERAL OPTIONS
 # =========================
-dataset_cerra: "/projects/0/prjs1154/CentralEurope_2014_2020/CERRA"
-dataset_era5: "/projects/0/prjs1154/CentralEurope_2014_2020/ERA5"
+dataset_cerra: "/projects/0/prjs0951/Carlo/zz_processed_data/CERRA"
+dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/ERA5"
 model: UNet-CNN                   # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
