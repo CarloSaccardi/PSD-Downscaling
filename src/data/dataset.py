@@ -168,8 +168,8 @@ class Era5CropDataset(torch.utils.data.Dataset):
         
         # 1. Load statistics
         self.mean_dynamic_vars = np.load(f"{stats_dir}/dynamic_mean.npy")
-        self.std_dynamic_vars = np.load(f"{stats_dir}/dynamic_mean.npy")
-        self.mean_static_var = np.load(f"{stats_dir}/forcing_std.npy")
+        self.std_dynamic_vars = np.load(f"{stats_dir}/dynamic_std.npy")
+        self.mean_static_var = np.load(f"{stats_dir}/forcing_mean.npy")
         self.std_static_var = np.load(f"{stats_dir}/forcing_std.npy")
         
         # 2. Open datasets

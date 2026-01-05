@@ -1,35 +1,33 @@
 # =========================
 # GENERAL OPTIONS
 # =========================
-dataset_cerra: "/projects/0/prjs0951/Carlo/zz_processed_data/CERRA"
-dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/ERA5"
+dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/EURASIA"
 model: Swin-Unetr                  # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
-n_workers: 32                       # Dataloader workers
+n_workers: 8                       # Dataloader workers
 load: null                          # No checkpoint loading - train from scratch
 resume: null
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
-wandb_project: finetune                #UNet-Cnn               # Optional wandb project name
-run_name: Swin-FromScratch-toy              # Optional run name
+wandb_project: simMIM-light                #UNet-Cnn               # Optional wandb project name
+run_name: sixty-correct               # Optional run name
 
 # =========================
 # DATASET SETTINGS
 # =========================
-output_variables: null             # List of vars to predict
 img_in_channels: 11
-img_out_channels: 6
+img_out_channels: 11
 img_resolution: [384, 384]
 
 # =========================
 # MASKING SETTINGS
 # =========================
-mask_ratio: null                     # Ratio of input to mask
+mask_ratio: 0.6                     # Ratio of input to mask
 model_patch_size: 2
 mask_patch_size: 32
-use_light_decoder: False
+use_light_decoder: True
 
 # =========================
 # MODEL SETTINGS
