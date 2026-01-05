@@ -86,4 +86,3 @@ configs/*
 *.log
 *.err
 plot_tests/*
-yaml_configs/*
