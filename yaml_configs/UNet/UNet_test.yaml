@@ -1,16 +1,19 @@
-
-dataset_cerra: "/projects/0/prjs0951/Carlo/NeurIPS-workshop/CentralEurope_2014_2020/CERRA"
-dataset_era5: "/projects/0/prjs0951/Carlo/NeurIPS-workshop/CentralEurope_2014_2020/ERA5"
+# =========================
+# GENERAL OPTIONS
+# =========================
+dataset_cerra: "/projects/0/prjs1154/CentralEurope_2014_2020/CERRA"
+dataset_era5: "/projects/0/prjs1154/CentralEurope_2014_2020/ERA5"
+savepreds_path: "/projects/0/prjs1154/CentralEurope_2014_2020/preds_20142020"
 model: UNet-CNN                   # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
 n_workers: 8                       # Dataloader workers
-load: null
+load: "saved_models/CentralEurope_2014_2020/UNet-CNN-0-UNet-CNN-06_17_15-9228/min_val_loss.ckpt"                         # Path to checkpoint to load
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
-eval: null                         # val | test | null → train
-wandb_project: UNet-Cnn-psdLoss               # Optional wandb project name
-run_name: UNet-CNN-baseline        # Optional run name
+eval: "test"                         # val | test | null → train
+wandb_project: null #UNet-Cnn               # Optional wandb project name
+run_name: UNet-CNN-BigData-test        # Optional run name
 
 # =========================
 # DATASET SETTINGS
