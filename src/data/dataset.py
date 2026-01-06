@@ -37,14 +37,14 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         self.era5_mean = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_mean.npy"))
         self.era5_std = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_std.npy"))
         
-        self.cerra_dyn_mean = np.load(os.path.join(root_dir_cerra, "statistics", "dynamic_mean.npy"))
-        self.cerra_dyn_std = np.load(os.path.join(root_dir_cerra, "statistics", "dynamic_std.npy"))
+        self.cerra_dyn_mean = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_mean.npy"))
+        self.cerra_dyn_std = np.load(os.path.join(root_dir_era5, "statistics", "dynamic_std.npy"))
         
-        self.cerra_stat_mean = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_mean.npy"))
-        self.cerra_stat_std = np.load(os.path.join(root_dir_cerra, "statistics", "forcing_std.npy"))
+        self.cerra_stat_mean = np.load(os.path.join(root_dir_era5, "statistics", "forcing_mean.npy"))
+        self.cerra_stat_std = np.load(os.path.join(root_dir_era5, "statistics", "forcing_std.npy"))
 
         # 2. Open Datasets (Lazy Xarray)
-        self.era5_dyn_ds = xr.open_dataset(era5_dyn_path, engine="h5netcdf") 
+        self.era5_dyn_ds = xr.open_dataset(era5_dyn_path, engine="h5netcdf").sortby('latitude')
         self.cerra_dyn_ds = xr.open_dataset(cerra_dyn_path, engine="h5netcdf")
         
         # 3. Load Static Data into RAM (Optimization)
