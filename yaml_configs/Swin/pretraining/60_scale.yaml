@@ -1,22 +1,23 @@
 # =========================
 # GENERAL OPTIONS
 # =========================
-dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/EURASIA"
+dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/EURASIA2/EURASIA"
 model: Swin-Unetr                  # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
-n_workers: 8                       # Dataloader workers
-load: null                          # No checkpoint loading - train from scratch
-resume: null
+n_workers: 64                     # Dataloader workers
+load: null
+# resume: "saved_models/pretraining/sixty-Swin-Unetr-12_10_10-7489/last.ckpt"
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
 wandb_project: simMIM-light                #UNet-Cnn               # Optional wandb project name
-run_name: sixty-correct               # Optional run name
+run_name: sixty-scale-new              # Optional run name
 
 # =========================
 # DATASET SETTINGS
 # =========================
+output_variables: null
 img_in_channels: 11
 img_out_channels: 11
 img_resolution: [384, 384]
@@ -37,7 +38,6 @@ model_channels: 96
 channel_mult: [1, 2, 2]
 attn_resolutions: [16]
 model_type: SwinUNETR
-# freeze_encoder not needed - no checkpoint loaded (Experiment 3)
 
 # =========================
 # TRAINING SETTINGS
