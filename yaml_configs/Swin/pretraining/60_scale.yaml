@@ -12,7 +12,7 @@ restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
 wandb_project: simMIM-light                #UNet-Cnn               # Optional wandb project name
-run_name: sixty-continue              # Optional run name
+run_name: sixty-scale              # Optional run name
 
 # =========================
 # DATASET SETTINGS
