@@ -423,20 +423,30 @@ def main(args):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
 
     if config.eval:
-        eval_loader = torch.utils.data.DataLoader(
-            ERA5toCERRA2(
-                config.dataset.cerra_path,
-                config.dataset.era5_path,
-                split="test",#TODO: Change to val
-                subset=False,
-            ),
-            config.training.batch_size,
-            shuffle=False,
-            num_workers=config.training.n_workers,
-        )
-
-        print(f"Running evaluation on {config.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
+        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "EasternEurope"]
+        # regions = ["CentralEurope"]
+        # Ensure these lists are initialized before the loop
+        # test_dataset_list = []
+        
+        for region in regions:
+            # Load data
+            test_dataset = CerraEra5SuperResDataset(
+                args.dataset_cerra,
+                args.dataset_era5,
+                region=region,
+                split="test",
+            )
+            # test_dataset_list.append(dataset_region_test)
+            
+        # test_dataset = torch.utils.data.ConcatDataset(test_dataset_list)
+            test_loader = torch.utils.data.DataLoader(  
+                test_dataset,
+                args.batch_size,
+                shuffle=False,
+                num_workers=args.n_workers,
+            )
+            
+            trainer.test(model, dataloaders=test_loader)
     else:
         
         regions = ["Iberia", "Scandinavia", "CentralEurope"]
@@ -488,38 +498,6 @@ def main(args):
             
         )
         
-        
-        # Load data
-        # train_loader = torch.utils.data.DataLoader(
-        #     ERA5toCERRA2(
-        #         config.dataset.cerra_path,
-        #         config.dataset.era5_path,
-        #         split="train",
-        #         subset=bool(config.dataset.subset_size),
-        #     ),
-        #     config.training.batch_size,
-        #     shuffle=True,
-        #     num_workers=config.training.n_workers,
-        # )
-        
-        # val_loader = torch.utils.data.DataLoader(
-        #     ERA5toCERRA2(
-        #         config.dataset.cerra_path,
-        #         config.dataset.era5_path,
-        #         split="val",
-        #         subset=bool(config.dataset.subset_size),
-        #     ),
-        #     config.training.batch_size,
-        #     shuffle=False,
-        #     num_workers=config.training.n_workers,
-        # )
-        # # Train model
-        # trainer.fit(
-        #     model=model,
-        #     train_dataloaders=train_loader,
-        #     val_dataloaders=val_loader,
-        #     ckpt_path=config.resume if config.resume else None,
-        # )
 
 
 def update_args(args, config_dict):
