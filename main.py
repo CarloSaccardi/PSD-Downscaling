@@ -307,86 +307,116 @@ def main(args):
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
         
-    if args.use_light_decoder:
-            
-        # Load data
-        train_loader = torch.utils.data.DataLoader(
-            Era5CropDataset(
-                args.dataset_era5,
-                split="train",
-                mask_ratio=args.mask_ratio,
-                model_patch_size=args.model_patch_size,
-                mask_patch_size=args.mask_patch_size,
-            ),
-            args.batch_size,
-            shuffle=True,
-            num_workers=args.n_workers,
-        )
         
-        val_loader = torch.utils.data.DataLoader(
-            Era5CropDataset(
-                args.dataset_era5,
-                split="validation",
-                mask_ratio=args.mask_ratio,
-                model_patch_size=args.model_patch_size,
-                mask_patch_size=args.mask_patch_size,
-            ),
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
+    if not args.eval:
+        
+        if args.use_light_decoder:
+                
+            # Load data
+            train_loader = torch.utils.data.DataLoader(
+                Era5CropDataset(
+                    args.dataset_era5,
+                    split="train",
+                    mask_ratio=args.mask_ratio,
+                    model_patch_size=args.model_patch_size,
+                    mask_patch_size=args.mask_patch_size,
+                ),
+                args.batch_size,
+                shuffle=True,
+                num_workers=args.n_workers,
+            )
+            
+            val_loader = torch.utils.data.DataLoader(
+                Era5CropDataset(
+                    args.dataset_era5,
+                    split="validation",
+                    mask_ratio=args.mask_ratio,
+                    model_patch_size=args.model_patch_size,
+                    mask_patch_size=args.mask_patch_size,
+                ),
+                args.batch_size,
+                shuffle=False,
+                num_workers=args.n_workers,
+            )
+            
+        else:
+            
+            regions = ["Iberia", "Scandinavia", "CentralEurope"]
+            # regions = ["CentralEurope"]
+            # Ensure these lists are initialized before the loop
+            train_dataset_list = []
+            val_dataset_list = []
+
+            for region in regions:
+                # Load data
+                dataset_region_train = CerraEra5SuperResDataset(
+                    args.dataset_cerra,
+                    args.dataset_era5,
+                    region=region,
+                    split="train",
+                )
+                
+                dataset_region_val = CerraEra5SuperResDataset(
+                    args.dataset_cerra,
+                    args.dataset_era5,
+                    region=region,
+                    split="val",
+                )
+                
+                train_dataset_list.append(dataset_region_train)
+                val_dataset_list.append(dataset_region_val)
+                
+            train_dataset = torch.utils.data.ConcatDataset(train_dataset_list)
+            val_dataset = torch.utils.data.ConcatDataset(val_dataset_list)
+            
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                args.batch_size,
+                shuffle=True,
+                num_workers=args.n_workers,
+            )
+            
+            val_loader = torch.utils.data.DataLoader(
+                val_dataset,
+                args.batch_size,
+                shuffle=False,
+                num_workers=args.n_workers,
+            )
+        # Train model
+        trainer.fit(
+            model=model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+            ckpt_path= args.resume if args.resume else None,
+            
         )
         
     else:
         
-        regions = ["Iberia", "Scandinavia", "CentralEurope"]
+        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey", "EasternEurope"]
         # regions = ["CentralEurope"]
         # Ensure these lists are initialized before the loop
-        train_dataset_list = []
-        val_dataset_list = []
-
+        # test_dataset_list = []
+        
         for region in regions:
             # Load data
-            dataset_region_train = CerraEra5SuperResDataset(
+            test_dataset = CerraEra5SuperResDataset(
                 args.dataset_cerra,
                 args.dataset_era5,
                 region=region,
-                split="train",
+                split="test",
+            )
+            # test_dataset_list.append(dataset_region_test)
+            
+        # test_dataset = torch.utils.data.ConcatDataset(test_dataset_list)
+            test_loader = torch.utils.data.DataLoader(  
+                test_dataset,
+                args.batch_size,
+                shuffle=False,
+                num_workers=args.n_workers,
             )
             
-            dataset_region_val = CerraEra5SuperResDataset(
-                args.dataset_cerra,
-                args.dataset_era5,
-                region=region,
-                split="val",
-            )
-            
-            train_dataset_list.append(dataset_region_train)
-            val_dataset_list.append(dataset_region_val)
-            
-        train_dataset = torch.utils.data.ConcatDataset(train_dataset_list)
-        val_dataset = torch.utils.data.ConcatDataset(val_dataset_list)
-        
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            args.batch_size,
-            shuffle=True,
-            num_workers=args.n_workers,
-        )
-        
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
-        )
-    # Train model
-    trainer.fit(
-        model=model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader,
-        ckpt_path= args.resume if args.resume else None,
-        
-    )
+            trainer.test(model, dataloaders=test_loader)
 
 
 def update_args(args, config_dict):

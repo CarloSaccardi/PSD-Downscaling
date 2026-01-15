@@ -142,6 +142,25 @@ class SwinUNetrWrapper(pl.LightningModule):
         ):
             self.load_metrics_and_plots(x_rec, ground_truth, batch_idx, mask=None)
             
+    
+    def test_step(self, batch, batch_idx):
+        # compute forward pass, compute MSE, MAE, plot PSD, and plot some examples
+        x, target = batch 
+        x_rec, _ = self.forward(x, patch_mask=None)
+        mse = F.mse_loss(x_rec, target)
+        mae = F.l1_loss(x_rec, target)
+        self.log("test_mse", mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+        self.log("test_mae", mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+        return {"test_mse": mse.detach(), "test_mae": mae.detach()}
+
+    def on_test_epoch_end(self):
+        """Print aggregated test metrics (already reduced by Lightning)."""
+        if self.trainer.is_global_zero:
+            mse = self.trainer.callback_metrics.get("test_mse", None)
+            mae = self.trainer.callback_metrics.get("test_mae", None)
+            if mse is not None and mae is not None:
+                print(f"Test MSE (epoch): {mse:.4f}, Test MAE (epoch): {mae:.4f}")
+            
             
     def get_loss(self, x, x_rec, target, mask_bool):
         """
@@ -215,6 +234,7 @@ class SwinUNetrWrapper(pl.LightningModule):
             wandb.log(log_plot_dict)
 
         plt.close("all") 
+        
         
         
     def _upsample(self, lr_tensor, target_size=(384, 384)):
