@@ -211,6 +211,11 @@ def get_args():
         default=False,
         help="Use light decoder for pre-training (default: False). Set via config file.",
     )
+    parser.add_argument(
+        "--load_encoder_only",
+        default=True,
+        help="When loading a checkpoint, only load encoder weights"
+    )
     return parser.parse_args()
 
 def main(args):
@@ -393,7 +398,7 @@ def main(args):
         
     else:
         
-        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey", "EasternEurope"]
+        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "EasternEurope"]
         # regions = ["CentralEurope"]
         # Ensure these lists are initialized before the loop
         # test_dataset_list = []
@@ -404,7 +409,7 @@ def main(args):
                 args.dataset_cerra,
                 args.dataset_era5,
                 region=region,
-                split="test",
+                split=args.eval,
             )
             # test_dataset_list.append(dataset_region_test)
             

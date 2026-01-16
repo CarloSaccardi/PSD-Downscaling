@@ -40,6 +40,7 @@ channel_mult: [1, 2, 2]
 attn_resolutions: [16]
 model_type: SwinUNETR
 freeze_encoder: True              # Freeze encoder parameters (Experiment 1)
+load_encoder_only: False
 
 # =========================
 # TRAINING SETTINGS
@@ -47,7 +48,7 @@ freeze_encoder: True              # Freeze encoder parameters (Experiment 1)
 val_interval: 1
 lr: 2.0e-4
 epochs: null
-batch_size: 64
+batch_size: 32
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null          # Set a number to enable clipping

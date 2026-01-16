@@ -7,13 +7,13 @@ model: Swin-Unetr                  # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
 n_workers: 32                       # Dataloader workers
-load: "saved_models/pretraining/sixty-Swin-Unetr-12_10_10-7489/min_val_loss.ckpt"
+load: "saved_models/Swin-FineTune-Unfrozen-Swin-Unetr-01_06_12-5040/min_val_loss.ckpt"
 resume: null
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
-eval: null                         # val | test | null → train
-wandb_project: finetune                #UNet-Cnn               # Optional wandb project name
-run_name: Swin-FineTune-Unfrozen               # Optional run name
+eval: test                         # val | test | null → train
+wandb_project: null                #UNet-Cnn               # Optional wandb project name
+run_name: frozen_encoder_test               # Optional run name
 
 # =========================
 # DATASET SETTINGS
@@ -39,17 +39,17 @@ model_channels: 96
 channel_mult: [1, 2, 2]
 attn_resolutions: [16]
 model_type: SwinUNETR
-freeze_encoder: False              # Do NOT freeze encoder parameters (Experiment 2)
+freeze_encoder: True              # Freeze encoder parameters (Experiment 1)
+load_encoder_only: False
 
 # =========================
 # TRAINING SETTINGS
 # =========================
 val_interval: 1
 lr: 2.0e-4
-epochs: 5000
-batch_size: 64
+epochs: null
+batch_size: 32
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null          # Set a number to enable clipping
 checkpoint_level: 0
-

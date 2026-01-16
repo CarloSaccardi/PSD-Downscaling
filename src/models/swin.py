@@ -266,14 +266,16 @@ class SwinUNetrWrapper(pl.LightningModule):
         
         # Filter state dict: keep only swinViT and mask_token
         state_dict = checkpoint['state_dict']
-        filtered = {k: v for k, v in state_dict.items() 
-                    if k.startswith('swin_unetr.swinViT.') or k.startswith('swin_unetr.mask_token')}
         
-        # Load with strict=False
-        model.load_state_dict(filtered, strict=False)
+        if kwargs['args'].load_encoder_only:
+            filtered = {k: v for k, v in state_dict.items()
+                        if k.startswith('swin_unetr.swinViT.') or k.startswith('swin_unetr.mask_token')}
+            model.load_state_dict(filtered, strict=False)
+        else:
+            model.load_state_dict(state_dict, strict=False)    
         
         # Handle encoder freezing/unfreezing in fine-tuning mode
-        if not model.use_light_decoder:
+        if not model.use_light_decoder and kwargs['args'].load_encoder_only:
             if kwargs['args'].freeze_encoder:
                 # Freeze encoder parameters
                 for param in model.swin_unetr.swinViT.parameters():
