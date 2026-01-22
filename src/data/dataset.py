@@ -158,8 +158,8 @@ class Era5CropDataset(torch.utils.data.Dataset):
                  mask_ratio,
                  model_patch_size,
                  mask_patch_size,
-                 variables=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'], 
-                 crop_size=85):
+                 crop_size,
+                 variables=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp']):
         super().__init__()
         
         stats_dir = os.path.join(path, "statistics")
@@ -196,7 +196,7 @@ class Era5CropDataset(torch.utils.data.Dataset):
         
         #7. Initialize masking generator
         self.mask_generator = MaskGenerator(
-            input_size=384,  # Your final upsampled size
+            input_size=crop_size,  # Your final upsampled size
             mask_patch_size=mask_patch_size,
             model_patch_size=model_patch_size, # Must match your model's patch size
             mask_ratio=mask_ratio
@@ -292,7 +292,7 @@ class Era5CropDataset(torch.utils.data.Dataset):
             data_array = data_crop.to_array()
 
             # 4. NOW, call .values.
-            #    This executes the read, pulling ONLY the [n_vars, 85, 85]
+            #    This executes the read, pulling ONLY the [n_vars, 96, 96]
             #    block of data from the NetCDF file.
             return data_array.values
 

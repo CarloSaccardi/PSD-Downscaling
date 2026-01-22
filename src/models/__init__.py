@@ -6,6 +6,5 @@ This module contains the neural network models and their PyTorch Lightning wrapp
 
 from .unet import UNetWrapper
 from .diffusion import DiffusionWrapper
-from .swin import SwinUNetrWrapper
-
-__all__ = ['UNetWrapper', 'DiffusionWrapper', 'SwinUNetrWrapper']
+from .swin import SwinV2Wrapper
+__all__ = ['UNetWrapper', 'DiffusionWrapper', 'SwinV2Wrapper']
