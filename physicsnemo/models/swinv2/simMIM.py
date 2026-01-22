@@ -84,6 +84,9 @@ class SwinV2Pretrain(nn.Module):
             features_only=False
         )
         
+        #remove .head from backbone
+        del self.backbone.head
+        
         # 2. Get dims using feature_info (Verified existing)
         self.feature_info = self.backbone.feature_info
         embed_dim = self.feature_info[0]["num_chs"]  # First stage (patch embedding)
