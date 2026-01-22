@@ -10,15 +10,17 @@ from lightning_fabric.utilities import seed
 
 # First-party
 from src.utils import utils
-from src.models import UNetWrapper, DiffusionWrapper, SwinUNetrWrapper
-from src.data import Era5CropDataset, CerraEra5SuperResDataset
+from src.models import UNetWrapper, DiffusionWrapper, SwinV2Wrapper
+from src.data import Era5CropDataset
 import os
 import yaml
+import numpy as np
+
 
 MODELS = {
     "UNet-CNN": UNetWrapper,
     "Diffusion": DiffusionWrapper,
-    "Swin-Unetr": SwinUNetrWrapper
+    "Swin-V2": SwinV2Wrapper
 }
 
 
@@ -112,7 +114,7 @@ def get_args():
         help="Number of output channels",
     )
     parser.add_argument(
-        "--img_resolution",  
+        "--img_size",  
         type=list,
         default=[300, 300],
         help="Resolution of the input images",
@@ -182,6 +184,12 @@ def get_args():
         default=None,
         help="Path to resume training from (default: None)",
     )   
+    parser.add_argument(
+        "--crop_size",
+        type=int,
+        default=96,
+        help="Crop size for the dataset (default: 96)",
+    )
     #simMIM args
     parser.add_argument(
         "--mask_ratio",
@@ -211,7 +219,27 @@ def get_args():
         default=False,
         help="Use light decoder for pre-training (default: False). Set via config file.",
     )
+    parser.add_argument(
+        "--swin_v2_variant",
+        type=str,
+        default="base",
+        help="Swin V2 variant (default: base). Set via config file.",
+    )
+    parser.add_argument(
+        "--window_size",
+        type=int,
+        default=12,
+        help="Window size for Swin V2 (default: 12). Set via config file.",
+    )
     return parser.parse_args()
+
+
+def worker_init_fn(worker_id):
+    """Seed each worker's NumPy and Python random state."""
+    worker_seed = args.seed + worker_id
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    
 
 def main(args):
     # Asserts for arguments
@@ -307,78 +335,37 @@ def main(args):
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
         
-    if args.use_light_decoder:
             
-        # Load data
-        train_loader = torch.utils.data.DataLoader(
-            Era5CropDataset(
-                args.dataset_era5,
-                split="train",
-                mask_ratio=args.mask_ratio,
-                model_patch_size=args.model_patch_size,
-                mask_patch_size=args.mask_patch_size,
-            ),
-            args.batch_size,
-            shuffle=True,
-            num_workers=args.n_workers,
-        )
+    # Load data
+    train_loader = torch.utils.data.DataLoader(
+        Era5CropDataset(
+            args.dataset_era5,
+            split="validation",
+            mask_ratio=args.mask_ratio,
+            model_patch_size=args.model_patch_size,
+            mask_patch_size=args.mask_patch_size,
+            crop_size=args.crop_size,
+        ),
+        args.batch_size,
+        shuffle=True,
+        num_workers=args.n_workers,
+        worker_init_fn=worker_init_fn
+    )
+    
+    val_loader = torch.utils.data.DataLoader(
+        Era5CropDataset(
+            args.dataset_era5,
+            split="validation",
+            mask_ratio=args.mask_ratio,
+            model_patch_size=args.model_patch_size,
+            mask_patch_size=args.mask_patch_size,
+            crop_size=args.crop_size,
+        ),
+        args.batch_size,
+        shuffle=False,
+        num_workers=args.n_workers,
+    )
         
-        val_loader = torch.utils.data.DataLoader(
-            Era5CropDataset(
-                args.dataset_era5,
-                split="validation",
-                mask_ratio=args.mask_ratio,
-                model_patch_size=args.model_patch_size,
-                mask_patch_size=args.mask_patch_size,
-            ),
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
-        )
-        
-    else:
-        
-        regions = ["Iberia", "Scandinavia", "CentralEurope"]
-        # regions = ["CentralEurope"]
-        # Ensure these lists are initialized before the loop
-        train_dataset_list = []
-        val_dataset_list = []
-
-        for region in regions:
-            # Load data
-            dataset_region_train = CerraEra5SuperResDataset(
-                args.dataset_cerra,
-                args.dataset_era5,
-                region=region,
-                split="train",
-            )
-            
-            dataset_region_val = CerraEra5SuperResDataset(
-                args.dataset_cerra,
-                args.dataset_era5,
-                region=region,
-                split="val",
-            )
-            
-            train_dataset_list.append(dataset_region_train)
-            val_dataset_list.append(dataset_region_val)
-            
-        train_dataset = torch.utils.data.ConcatDataset(train_dataset_list)
-        val_dataset = torch.utils.data.ConcatDataset(val_dataset_list)
-        
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            args.batch_size,
-            shuffle=True,
-            num_workers=args.n_workers,
-        )
-        
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
-        )
     # Train model
     trainer.fit(
         model=model,
