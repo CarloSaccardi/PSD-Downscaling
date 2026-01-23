@@ -9,7 +9,6 @@ PARAM_NAMES_SHORT_CERRA = [
     "sshf",
     "zust",
     "sp",
-    "geopotential"
 ]
 
 PARAM_UNITS_CERRA = [
@@ -19,7 +18,6 @@ PARAM_UNITS_CERRA = [
     "W/m²",
     "m/s", 
     "Pa/s",
-    "m²/s²",
 ]
 
 GRID_SHAPE_CERRA = (384, 384)  # (y, x)
