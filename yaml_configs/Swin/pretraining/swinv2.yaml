@@ -7,7 +7,7 @@ subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
 n_workers: 64                     # Dataloader workers
 load: null
-resume: "saved_models/Swin-V2-Swin-V2-01_22_14-4424/last.ckpt"
+resume: "saved_models/Swin-V2-Swin-V2-01_22_15-7411/last.ckpt"
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
@@ -47,7 +47,7 @@ window_size: 6
 # =========================
 val_interval: 1
 lr: 2.0e-4
-epochs: 10000
+epochs: 20000
 batch_size: 256
 lr_decay: 1
 lr_rampup: 0
