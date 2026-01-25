@@ -340,7 +340,7 @@ def main(args):
     train_loader = torch.utils.data.DataLoader(
         Era5CropDataset(
             args.dataset_era5,
-            split="validation",
+            split="train",
             mask_ratio=args.mask_ratio,
             model_patch_size=args.model_patch_size,
             mask_patch_size=args.mask_patch_size,

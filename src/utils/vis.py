@@ -29,7 +29,7 @@ def plot_ensemble_prediction(
     fig, axes = plt.subplots(
         1,
         3,
-        figsize=(15, 15),
+        figsize=(25, 15),
         #subplot_kw={"projection": constants.LAMBERT_PROJ},
     )
     axes = axes.flatten()
@@ -43,14 +43,14 @@ def plot_ensemble_prediction(
         ax_title="Ground Truth - Masked",
     )
     plot_on_axis(
-        axes[0],
+        axes[1],
         target,
         vmin=target.min().item(),
         vmax=target.max().item(),
         ax_title="Ground Truth",
     )
     plot_on_axis(
-        axes[1],
+        axes[2],
         prediction,
         vmin=prediction.min().item(),
         vmax=prediction.max().item(),
@@ -62,7 +62,7 @@ def plot_ensemble_prediction(
 
     # Add colorbars
     values_cbar = fig.colorbar(
-        gt_im, ax=axes[:2], aspect=60, location="bottom", shrink=0.9
+        gt_im, ax=axes[:3], aspect=60, location="bottom", shrink=0.9
     )
     values_cbar.ax.tick_params(labelsize=10)
     #std_cbar = fig.colorbar(std_im, aspect=30, location="bottom", shrink=0.9)
@@ -74,7 +74,7 @@ def plot_ensemble_prediction(
     return fig
 
 
-def plot_on_axis(ax, data, alpha=None, vmin=None, vmax=None, ax_title=None):
+def plot_on_axis(ax, data, vmin=None, vmax=None, ax_title=None):
     """
     Plot weather state on given axis
     """
