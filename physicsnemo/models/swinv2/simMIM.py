@@ -49,7 +49,7 @@ class SwinV2Pretrain(nn.Module):
     def __init__(
         self,
         variant: str = 'base',
-        in_channels: int = 11,
+        in_channels: int = 7,
         out_channels: int = 6,
         pretrained: bool = False,
         img_size: Tuple[int, int] = (96, 96),
@@ -115,70 +115,78 @@ class SwinV2Pretrain(nn.Module):
                 nn.PixelShuffle(self.total_downsample) 
             )
     
+
     def forward(self, x: torch.Tensor, patch_mask: torch.Tensor):
-        """
-        Forward pass for SimMIM pre-training.
-        
-        Args:
-            x: Input tensor (B, C, H, W)
-            patch_mask: Mask tensor (B, H_p, W_p) where 1=MASKED, 0=UNMASKED
-        
-        Returns:
-            reconstruction: Reconstructed image (B, C, H, W)
-            pixel_mask: Boolean mask for loss computation (B, 1, H, W)
-        """
-        # ============================================
-        # STEP 1: Get patch embeddings
-        # ============================================
-        x_patch = self.backbone.patch_embed(x)  # (B, embed_dim, H_p, W_p)
-        
-        # ============================================
-        # STEP 2: Apply SimMIM masking
-        # ============================================
-        B, H_p, W_p, C = x_patch.shape
-        x_flat = x_patch.view(B, H_p * W_p, C)
-        
-        # Expand mask token: (B, L, C)
-        mask_tokens = self.mask_token.expand(B, H_p * W_p, -1)
-        
-        # Get mask weights: (B, L, 1)
-        w = patch_mask.flatten(1).unsqueeze(-1).type_as(mask_tokens)
-        
-        # Apply masking: replace masked tokens
-        x_masked = x_flat * (1.0 - w) + mask_tokens * w
-        
-        # ============================================
-        # STEP 5: Create pixel-level mask for loss
-        # ============================================
-        # Expand patch mask to pixel level
-        pixel_mask = patch_mask.repeat_interleave(self.patch_size, 1) \
+            """
+            Forward pass for SimMIM pre-training with a Forcing Channel.
+            
+            Args:
+                x: Input tensor (B, C=6, H, W)
+                patch_mask: Mask tensor (B, H_p, W_p) where 1=MASKED, 0=UNMASKED
+            """
+            # ============================================
+            # STEP 1: Create pixel-level mask (Moved to Top)
+            # ============================================
+            # We need this immediately to mask specific input channels
+            pixel_mask = patch_mask.repeat_interleave(self.patch_size, 1) \
                                 .repeat_interleave(self.patch_size, 2)
-        pixel_mask = pixel_mask.unsqueeze(1)  # (B, 1, H, W)
-        
-        # ============================================
-        # STEP 3: Get features using timm
-        # ============================================
-        # timm's features_only=True automatically extracts features at each stage
-        # However, we need to manually run stages to ensure masked tokens are used
-        # So we'll manually extract the final feature
-        x_curr = x_masked.view(B, H_p, W_p, C)
-        
-        if self.use_light_decoder:
+            pixel_mask = pixel_mask.unsqueeze(1)  # (B, 1, H, W)
+
+            # ============================================
+            # STEP 2: Apply Input-Level Masking (Preserve Channel 6)
+            # ============================================
+            # Clone x to avoid modifying original tensor
+            x_masked_input = x.clone()
             
-            for layer in self.backbone.layers:
-                x_curr = layer(x_curr)
-            x_final = self.backbone.norm(x_curr)
-            x_final = x_final.permute(0, 3, 1, 2).contiguous()
-            reconstruction = self.light_decoder(x_final)  # (B, out_channels, H, W)
-            return reconstruction, pixel_mask.bool()
-        
-        else:
+            # Apply mask ONLY to the first 5 channels (indices 0 to 4)
+            # x[:, :-1] selects channels 0-4. 
+            # We multiply by (1 - pixel_mask) to zero out masked regions.
+            x_masked_input[:, :-1, :, :] = x_masked_input[:, :-1, :, :] * (1.0 - pixel_mask)
             
-            features = []
-            for layer in self.backbone.layers:
-                x_curr = layer(x_curr)
-                # Store as Standard PyTorch (B, C, H, W)
-                features.append(x_curr.permute(0, 3, 1, 2).contiguous())
-            return features, pixel_mask.bool()
-    
+            # Channel 5 (forcing) is untouched and remains fully visible.
+
+            # ============================================
+            # STEP 3: Get patch embeddings
+            # ============================================
+            # Now we embed the partially zeroed input. 
+            # The embedding at masked locations now represents: "Zero Image + Real Forcing"
+            x_patch = self.backbone.patch_embed(x_masked_input)  # (B, embed_dim, H_p, W_p)
+            
+            # ============================================
+            # STEP 4: Inject Mask Token (Add, don't Replace)
+            # ============================================
+            B, H_p, W_p, C = x_patch.shape
+            x_flat = x_patch.view(B, H_p * W_p, C)
+            
+            # Expand mask token: (B, L, C)
+            mask_tokens = self.mask_token.expand(B, H_p * W_p, -1)
+            
+            # Get mask weights: (B, L, 1)
+            w = patch_mask.flatten(1).unsqueeze(-1).type_as(mask_tokens)
+            
+            # KEY CHANGE: ADD the mask token instead of replacing.
+            # Current state at masked pos: Embedding(0_img, forcing)
+            # Goal state: Embedding(0_img, forcing) + Mask_Signal
+            x_masked = x_flat + (mask_tokens * w)
+            
+            # ============================================
+            # STEP 5: Decode (Standard Logic)
+            # ============================================
+            x_curr = x_masked.view(B, H_p, W_p, C)
+            
+            if self.use_light_decoder:
+                for layer in self.backbone.layers:
+                    x_curr = layer(x_curr)
+                x_final = self.backbone.norm(x_curr)
+                x_final = x_final.permute(0, 3, 1, 2).contiguous()
+                reconstruction = self.light_decoder(x_final)
+                return reconstruction, pixel_mask.bool()
+            
+            else:
+                features = []
+                for layer in self.backbone.layers:
+                    x_curr = layer(x_curr)
+                    features.append(x_curr.permute(0, 3, 1, 2).contiguous())
+                return features, pixel_mask.bool()
+        
 
