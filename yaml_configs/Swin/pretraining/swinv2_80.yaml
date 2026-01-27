@@ -1,0 +1,56 @@
+# =========================
+# GENERAL OPTIONS
+# =========================
+dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/EURASIA"
+model: Swin-V2                  # Model architecture
+subset_ds: 0                       # 0 = full dataset, >0 = subset size
+seed: 32
+n_workers: 64                     # Dataloader workers
+load: null
+resume: null
+restore_opt: 1                     # 0 = do not restore optimizer
+precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
+eval: null                         # val | test | null → train
+wandb_project: pretraining                #UNet-Cnn               # Optional wandb project name
+run_name: Swin-V2-80           # Optional run name
+
+# =========================
+# DATASET SETTINGS
+# =========================
+output_variables: null
+img_in_channels: 7
+img_out_channels: 6
+img_size: [96, 96]
+crop_size: 96
+
+# =========================
+# MASKING SETTINGS
+# =========================
+mask_ratio: 0.8                     # Ratio of input to mask
+model_patch_size: 4
+mask_patch_size: 12
+use_light_decoder: True
+
+# =========================
+# MODEL SETTINGS
+# =========================
+embedding_type: zero
+model_channels: 96
+channel_mult: [1, 2, 2]
+attn_resolutions: [16]
+model_type: SwinV2
+swin_v2_variant: base
+window_size: 6
+
+# =========================
+# TRAINING SETTINGS
+# =========================
+val_interval: 1
+lr: 2.0e-4
+epochs: 30000
+batch_size: 256
+lr_decay: 1
+lr_rampup: 0
+grad_clip_threshold: null          # Set a number to enable clipping
+checkpoint_level: 0
+
