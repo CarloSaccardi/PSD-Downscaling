@@ -33,6 +33,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         # Paths
         era5_path = os.path.join(root_dir_era5, split, f"{region}.nc")
         cerra_path = os.path.join(root_dir_cerra, split, f"{region}.nc")
+        era5_orography_path = os.path.join(root_dir_era5, split, f"static_{region}.nc")
         cerra_orography_path = os.path.join(root_dir_cerra, split, f"static_{region}.nc")
         
         # 1. Load Statistics
@@ -48,10 +49,16 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         
         # 3. Load Static Data into RAM (Optimization)
         # We perform the static normalization ONCE here to save CPU cycles in __getitem__
-        ds_static = xr.open_dataset(cerra_orography_path, engine="h5netcdf")
-        raw_static = ds_static['orog'].values.astype(np.float32)
-        self.cerra_orography = (raw_static - self.eurasia_orography_mean) / self.eurasia_orography_std
-        ds_static.close()
+        ds_static_cerra = xr.open_dataset(cerra_orography_path, engine="h5netcdf")
+        raw_static_cerra = ds_static_cerra['orog'].values.astype(np.float32)
+        self.cerra_orography = (raw_static_cerra - self.eurasia_orography_mean) / self.eurasia_orography_std
+        ds_static_cerra.close()
+        
+        ds_static_era5 = xr.open_dataset(era5_orography_path, engine="h5netcdf")
+        raw_static_era5 = ds_static_era5['orog'].values.astype(np.float32)
+        self.era5_orography = (raw_static_era5 - self.eurasia_orography_mean) / self.eurasia_orography_std
+        ds_static_era5.close()
+        ds_static_era5.close()
 
 
     def __len__(self):
@@ -74,7 +81,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         # 3. Load cerra orography
         cerra_orography = torch.from_numpy(self.cerra_orography[None, :, :]).float().squeeze(0) #remove first dimension
         
-        return era5, cerra, cerra_orography
+        return era5, cerra, cerra_orography, self.era5_orography
     
 
     def _load_dynamic_step(self, dataset, variables, idx):

@@ -69,7 +69,7 @@ class UNetWrapper(pl.LightningModule):
         return D_x.to(torch.float32)
 
     def training_step(self, batch, *args):
-        era5, cerra, cerra_orography = batch
+        era5, cerra, cerra_orography, _ = batch
         era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
         x = torch.cat([era5, cerra_orography], dim=1)
         D_x = self(x)
@@ -84,7 +84,7 @@ class UNetWrapper(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, *args):        
-        era5, cerra, cerra_orography = batch
+        era5, cerra, cerra_orography, _ = batch
         era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
         x = torch.cat([era5, cerra_orography], dim=1)
         D_x = self(x)
@@ -110,7 +110,7 @@ class UNetWrapper(pl.LightningModule):
     
     
     def test_step(self, batch, batch_idx):
-        era5, cerra, cerra_orography = batch
+        era5, cerra, cerra_orography, _ = batch
         era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
         x = torch.cat([era5, cerra_orography], dim=1)
         D_x = self(x)
