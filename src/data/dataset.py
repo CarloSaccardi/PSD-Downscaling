@@ -144,10 +144,6 @@ class Era5CropDataset(torch.utils.data.Dataset):
             model_patch_size=model_patch_size, # Must match your model's patch size
             mask_ratio=mask_ratio
         )
-        
-        print(f"Dataset initialized:")
-        print(f"  Time steps: {self.time_len}")
-        print(f"  Total Channels: {len(self.variables) + 1 + 4}") # dynamic + static + time
 
     def __len__(self):
         return self.time_len
@@ -162,19 +158,18 @@ class Era5CropDataset(torch.utils.data.Dataset):
         lat_idx, lon_idx = self._get_random_crop_indices()
         
         # 2. Get 4 time embedding features
-        time_features = self._get_time_embedding(idx)
+        # time_features = self._get_time_embedding(idx)
         
         # 3. Load/crop all data channels
         crop_dynamics = self._load_crop_dynamic(idx, lat_idx, lon_idx)
         crop_static = self._crop_static(lat_idx, lon_idx)
-        time_channels = self._broadcast_time_features(time_features)
         
         # 4. Normalize
         crop_dynamics = (crop_dynamics - self.mean_dynamic_vars[:, None, None]) / self.std_dynamic_vars[:, None, None]
         crop_static = (crop_static - self.mean_static_var) / self.std_static_var
         
         # 5. Concatenate and return
-        all_features = np.concatenate([crop_dynamics, crop_static, time_channels], axis=0)
+        all_features = np.concatenate([crop_dynamics, crop_static], axis=0)
         
         # 6. Convert to torch tensor
         all_features_tensor = torch.from_numpy(all_features.copy()).float()
@@ -191,26 +186,11 @@ class Era5CropDataset(torch.utils.data.Dataset):
 
     def _get_random_crop_indices(self):
         """Returns random starting indices for a latitude and longitude."""
+        # Sample crop center uniformly across the full grid, then clamp
         lat_idx = np.random.randint(0, self.max_lat_idx + 1)
         lon_idx = np.random.randint(0, self.max_lon_idx + 1)
         return lat_idx, lon_idx
 
-    def _get_time_embedding(self, idx):
-        """Computes the 4 time embedding features for a given time index."""
-        datetime = self.time_axis[idx]
-        dt_obj = pd.to_datetime(datetime)
-        day_of_year = dt_obj.dayofyear
-        hour = dt_obj.hour
-        
-        day_norm = 2 * np.pi * day_of_year / 365.25
-        hour_norm = 2 * np.pi * hour / 24.0
-
-        day_sin = (np.sin(day_norm) + 1) / 2
-        day_cos = (np.cos(day_norm) + 1) / 2
-        hour_sin = (np.sin(hour_norm) + 1) / 2
-        hour_cos = (np.cos(hour_norm) + 1) / 2
-        
-        return [day_sin, day_cos, hour_sin, hour_cos]
 
     def _load_crop_dynamic(self, idx, lat_idx, lon_idx):
             """
@@ -261,6 +241,7 @@ class Era5CropDataset(torch.utils.data.Dataset):
             self.dynamic_f.close()
         if self.forcing_f:
             self.forcing_f.close()
+
             
 
 
