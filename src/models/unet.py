@@ -53,7 +53,6 @@ class UNetWrapper(pl.LightningModule):
 
     def forward(
         self,
-        condition: torch.Tensor,
         x: torch.Tensor,
         force_fp32: bool = False,
         **model_kwargs: dict,
@@ -66,8 +65,6 @@ class UNetWrapper(pl.LightningModule):
 
         Parameters
         ----------
-        condition : torch.Tensor
-            The conditioning tensor, typically zero-filled, of shape (B, C_hr, H, W).
         x : torch.Tensor
             Low-resolution input image of shape (B, C_lr, H, W).
         force_fp32 : bool, optional
