@@ -1,46 +1,53 @@
 # =========================
 # GENERAL OPTIONS
 # =========================
-dataset_cerra: "/projects/0/prjs0951/Carlo/zz_processed_data/CERRA"
-dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/ERA5"
-model: Diffusion                   # Model architecture
+dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/EURASIA"
+model: Swin-Unetr                  # Model architecture
 subset_ds: 0                       # 0 = full dataset, >0 = subset size
 seed: 32
-n_workers: 8                      # Dataloader workers
+n_workers: 64                     # Dataloader workers
 load: null
+resume: null #"saved_models/sixty-continue-Swin-Unetr-01_05_21-0694/last.ckpt"
 restore_opt: 1                     # 0 = do not restore optimizer
 precision: "16-mixed"              # 32 | 16 | 16-mixed | bf16
 eval: null                         # val | test | null → train
-wandb_project: diffusion-multisource
-run_name: Diffusion        # Optional run name
+wandb_project: simMIM-light                #UNet-Cnn               # Optional wandb project name
+run_name: sixty-scale              # Optional run name
 
 # =========================
 # DATASET SETTINGS
 # =========================
-output_variables: null             # List of vars to predict
+output_variables: null
 img_in_channels: 11
-img_out_channels: 6
+img_out_channels: 11
 img_resolution: [384, 384]
+dataset_type: Era5Crop
+# =========================
+# MASKING SETTINGS
+# =========================
+mask_ratio: 0.6                     # Ratio of input to mask
+model_patch_size: 2
+mask_patch_size: 32
+use_light_decoder: True
 
 # =========================
 # MODEL SETTINGS
 # =========================
-N_grid_channels: 4
 embedding_type: zero
-model_channels: 64
+model_channels: 96
 channel_mult: [1, 2, 2]
 attn_resolutions: [16]
-model_type: SongUNetPosEmbd
-gridtype: sinusoidal
-hr_mean_conditioning: False
+model_type: SwinUNETR
+
 # =========================
 # TRAINING SETTINGS
 # =========================
 val_interval: 1
-lr: 2.0e-4
-epochs: 300
-batch_size: 16
+lr: 8.0e-4
+epochs: 5000
+batch_size: 64
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null          # Set a number to enable clipping
 checkpoint_level: 0
+

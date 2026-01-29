@@ -20,11 +20,12 @@ num_ensembles: 32
 output_variables: null            # List of vars to predict
 save_preds_path: null
 resume: null
+swin_pretrained_checkpoint: null #saved_models/pre-trained-SwinV2/min_val_loss.ckpt
 
 # =========================
 # DATASET SETTINGS
 # =========================
-img_in_channels: 7
+img_in_channels: 11
 img_out_channels: 6
 img_resolution: [384, 384]
 dataset_type: CerraEra5SuperRes
