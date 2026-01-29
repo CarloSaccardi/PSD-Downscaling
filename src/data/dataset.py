@@ -27,6 +27,9 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
                  cerra_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp']):
         super().__init__()
         
+        self.era5_vars = era5_vars
+        self.cerra_vars = cerra_vars
+        
         # Paths
         era5_path = os.path.join(root_dir_era5, split, f"{region}.nc")
         cerra_path = os.path.join(root_dir_cerra, split, f"{region}.nc")
@@ -65,8 +68,8 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         cerra = self._load_dynamic_step(self.cerra_ds, self.cerra_vars, idx)
         
         # 2. Normalize Dynamic Data
-        era5 = (era5 - self.era5_mean[:, None, None]) / self.era5_std[:, None, None]
-        cerra = (cerra - self.cerra_dyn_mean[:, None, None]) / self.cerra_dyn_std[:, None, None]
+        era5 = (era5 - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
+        cerra = (cerra - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
         
         # 3. Load cerra orography
         cerra_orography = torch.from_numpy(self.cerra_orography[None, :, :]).float().squeeze(0) #remove first dimension

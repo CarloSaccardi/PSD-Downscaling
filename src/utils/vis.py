@@ -25,7 +25,7 @@ def plot_ensemble_prediction(
         (not for std.)
     """
     
-    target_masked = target * (~mask)
+    target_masked = target * (~mask) if mask is not None else target - prediction
     fig, axes = plt.subplots(
         1,
         3,
@@ -40,7 +40,7 @@ def plot_ensemble_prediction(
         target_masked,
         vmin=target.min().item(),
         vmax=target.max().item(),
-        ax_title="Ground Truth - Masked",
+        ax_title="Ground Truth - Masked" if mask is not None else "Ground Truth - Residual",
     )
     plot_on_axis(
         axes[1],
@@ -79,7 +79,8 @@ def plot_on_axis(ax, data, vmin=None, vmax=None, ax_title=None):
     Plot weather state on given axis
     """
     #ax.coastlines()  # Add coastline outlines
-    data_grid = data.reshape(*constants.GRID_SHAPE_CROPPED).to(torch.float32).cpu().numpy()
+    H = W = int(data.shape[0]**0.5)
+    data_grid = data.reshape(H, W).to(torch.float32).cpu().numpy()
     im = ax.imshow(
         data_grid,
         origin="lower",

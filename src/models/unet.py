@@ -69,10 +69,8 @@ class UNetWrapper(pl.LightningModule):
         return D_x.to(torch.float32)
 
     def training_step(self, batch, *args):
-        cerra, era5, cerra_orography = batch
-        cerra = cerra.float()
-        era5 = era5.float()
-        cerra_orography = cerra_orography.float()
+        era5, cerra, cerra_orography = batch
+        era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
         x = torch.cat([era5, cerra_orography], dim=1)
         D_x = self(x)
         loss = F.mse_loss(D_x, cerra)
@@ -86,15 +84,12 @@ class UNetWrapper(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, *args):        
-        cerra, era5, cerra_orography = batch
-        cerra = cerra.float()
-        era5 = era5.float()
-        cerra_orography = cerra_orography.float()
+        era5, cerra, cerra_orography = batch
+        era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
         x = torch.cat([era5, cerra_orography], dim=1)
         D_x = self(x)
         val_loss = F.mse_loss(D_x, cerra)
         
-        # Log loss per time step forward and mean
         val_log_dict = {
             "val_loss": val_loss,
         }
@@ -111,16 +106,14 @@ class UNetWrapper(pl.LightningModule):
             and self.current_epoch % 10 == 0
             and self.wandb_project is not None
         ):
-            self.load_metrics_and_plots(D_x, cerra, batch_idx, mask=None)
+            self.load_metrics_and_plots(D_x, cerra, mask=None)
     
     
     def test_step(self, batch, batch_idx):
-        cerra, era5, cerra_orography = batch
-        cerra = cerra.float()
-        era5 = era5.float()
-        cerra_orography = cerra_orography.float()
+        era5, cerra, cerra_orography = batch
+        era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
         x = torch.cat([era5, cerra_orography], dim=1)
-        D_x = self(x, force_fp32=False)
+        D_x = self(x)
         mse = F.mse_loss(D_x, cerra)
         mae = F.l1_loss(D_x, cerra)
         self.log("test_mse", mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
@@ -142,51 +135,41 @@ class UNetWrapper(pl.LightningModule):
         return opt
             
             
-    def load_metrics_and_plots(self, prediction, high_res, batch_idx, mask=None):
-        
-        #reshap from (B, C, H, W) to (B, num_grid_nodes, C)
+    def load_metrics_and_plots(self, prediction, target, mask):
+        # Reshape from (B, C, H, W) to (B, num_grid_nodes, C)
         prediction = prediction.permute(0, 2, 3, 1).flatten(1, 2)
-        high_res = high_res.permute(0, 2, 3, 1).flatten(1, 2)
-        
-        if mask is None:
-            mask = torch.ones_like(high_res[:, :, 0])
+        target = target.permute(0, 2, 3, 1).flatten(1, 2)
         
         # Plot samples
         log_plot_dict = {}
-
+        
         var_i = random.randint(0, len(constants.PARAM_NAMES_SHORT_CERRA) - 1)
         var_name = constants.PARAM_NAMES_SHORT_CERRA[var_i]
         var_unit = constants.PARAM_UNITS_CERRA[var_i]
         
         sample = random.randint(0, prediction.shape[0] - 1)
-
-        pred_states = prediction[
-            sample, :, var_i
-        ]  # (S, num_grid_nodes)
         
-        target_state = high_res[
-            sample, :, var_i
-        ]  # (num_grid_nodes,)
-
-        plot_title = (
-            f"{var_name} ({var_unit})"
-        )
-
+        #select one mask grid
+        mask_grid = mask[sample, :, :].flatten(1,2).squeeze(0) if mask is not None else None
+        
+        
+        pred_states = prediction[sample, :, var_i]
+        target_state = target[sample, :, var_i]
+        
+        plot_title = f"{var_name} ({var_unit})"
+        
         # Make plots
-        log_plot_dict[
-            f"pred_{var_name}"
-        ] = vis.plot_ensemble_prediction(
+        log_plot_dict[f"pred_{var_name}"] = vis.plot_ensemble_prediction(
             pred_states,
             target_state,
-            obs_mask = mask[sample],
+            mask=mask_grid,
             title=f"{plot_title} (prior)",
         )
-
+        
         if not self.trainer.sanity_checking:
-            # Log all plots to wandb
             wandb.log(log_plot_dict)
-
-        plt.close("all")   
+        
+        plt.close("all") 
         
         
     def plot_preds(self, prediction, high_res, img_lr, diz_stats):

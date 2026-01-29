@@ -9,7 +9,7 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from src import utils
+from src.utils import utils
 from src.models import UNetWrapper, DiffusionWrapper
 from src.data import CerraEra5SuperResDataset
 import os
@@ -279,13 +279,13 @@ def get_args():
     return parser.parse_args()
 
 def main(args):
-    # Asserts for configuration
-    assert config.model.model_type in MODELS, f"Unknown model: {config.model.model_type}"
-    assert config.eval in (
+    # Asserts for arguments
+    assert args.model in MODELS, f"Unknown model: {args.model}"
+    assert args.eval in (
         None,
         "val",
         "test",
-    ), f"Unknown eval setting: {config.eval}"
+    ), f"Unknown eval setting: {args.eval}"
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -294,34 +294,29 @@ def main(args):
     print(f"Using {devices} GPUs")
 
     # Set seed
-    seed.seed_everything(config.training.seed)
+    seed.seed_everything(args.seed)
 
     # Instantiate model + trainer
     if torch.cuda.is_available():
-        device_name = "cuda"
-        torch.set_float32_matmul_precision(
-           "high"
-        )  # Allows using Tensor Cores on A100s
+        device_name = "gpu"
     else:
         device_name = "cpu"
 
-    # Load model parameters
-    model_class = MODELS[config.model.model_type]
+    # Load model parameters Use new args for model
+    model_class = MODELS[args.model]
     if args.load:
         model = model_class.load_from_checkpoint(args.load, args=args)
         if args.restore_opt:
-            # Save for later
-            # Unclear if this works for multi-GPU
             model.opt_state = torch.load(args.load)["optimizer_states"][0]
     else:
         model = model_class(args)
 
-    prefix = "subset-" if config.dataset.subset_size else ""
-    prefix += config.run_name if config.run_name else ""
-    if config.eval:
-        prefix = prefix + f"eval-{config.eval}-"
+    prefix = "subset-" if args.subset_ds else ""
+    prefix += args.run_name if hasattr(args, "run_name") else ""
+    if args.eval:
+        prefix = prefix + f"eval-{args.eval}-"
     run_name = (
-        f"{prefix}-{config.model.model_type}-"
+        f"{prefix}-{args.model}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
 
@@ -337,9 +332,9 @@ def main(args):
         )
     )
     
-    if config.wandb_project is not None:
+    if args.wandb_project is not None:
         logger = pl.loggers.WandbLogger(
-            project=config.wandb_project, name=run_name, config=config
+            project=args.wandb_project, name=run_name, config=args
         )
     else:
         logger = pl.loggers.TensorBoardLogger(
@@ -364,19 +359,14 @@ def main(args):
         callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
-        # accumulate_grad_batches=4
-        #profiler="simple",
     )
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0 and isinstance(logger, pl.loggers.WandbLogger):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
 
-    if config.eval:
+    if args.eval:
         regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "EasternEurope"]
-        # regions = ["CentralEurope"]
-        # Ensure these lists are initialized before the loop
-        # test_dataset_list = []
         
         for region in regions:
             # Load data
@@ -386,9 +376,7 @@ def main(args):
                 region=region,
                 split="test",
             )
-            # test_dataset_list.append(dataset_region_test)
-            
-        # test_dataset = torch.utils.data.ConcatDataset(test_dataset_list)
+
             test_loader = torch.utils.data.DataLoader(  
                 test_dataset,
                 args.batch_size,
@@ -397,10 +385,10 @@ def main(args):
             )
             
             trainer.test(model, dataloaders=test_loader)
+            test_loader.dataset.close()
     else:
         
         regions = ["Iberia", "Scandinavia", "CentralEurope"]
-        # Ensure these lists are initialized before the loop
         train_dataset_list = []
         val_dataset_list = []
 
@@ -448,6 +436,8 @@ def main(args):
             
         )
         
+        train_loader.dataset.close()
+        val_loader.dataset.close()
 
 
 def update_args(args, config_dict):
