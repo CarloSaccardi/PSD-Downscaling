@@ -45,7 +45,7 @@ class UNetWrapper(pl.LightningModule):
         model_class = getattr(network_module, args.model_type)
         self.model = model_class(
             img_resolution=args.img_resolution,
-            in_channels=args.img_in_channels + args.N_grid_channels + args.img_out_channels,
+            in_channels=args.img_in_channels + args.N_grid_channels,
             out_channels=args.img_out_channels,
             **self.model_kwargs,
         )
@@ -87,10 +87,6 @@ class UNetWrapper(pl.LightningModule):
         ValueError
             If the model output dtype doesn't match the expected dtype.
         """
-        # SR: concatenate input channels
-        if x is not None:
-            x = torch.cat((condition, x), dim=1)
-
 
         F_x = self.model(
             x,  # (c_in * x).to(dtype),
@@ -107,8 +103,7 @@ class UNetWrapper(pl.LightningModule):
         target, x, *rest = batch
         target = target.float()
         x = x.float()
-        zero_input = torch.zeros_like(target, device=target.device)
-        D_yn = self(zero_input, x, force_fp32=False)
+        D_yn = self(x, force_fp32=False)
         loss = F.mse_loss(D_yn, target)
         
         log_dict = {
@@ -124,8 +119,7 @@ class UNetWrapper(pl.LightningModule):
         target, x, *rest = batch
         target = target.float()
         x = x.float()
-        zero_input = torch.zeros_like(target, device=target.device)
-        D_yn = self(zero_input, x, force_fp32=False)
+        D_yn = self(x, force_fp32=False)
         val_loss = F.mse_loss(D_yn, target)
         
         # Log loss per time step forward and mean
@@ -151,8 +145,7 @@ class UNetWrapper(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         # compute forward pass, compute MSE, MAE, plot PSD, and plot some examples
         target, x = batch 
-        zero_input = torch.zeros_like(target, device=target.device)
-        D_yn = self(zero_input, x, force_fp32=False)
+        D_yn = self(x, force_fp32=False)
         mse = F.mse_loss(D_yn, target)
         mae = F.l1_loss(D_yn, target)
         self.log("test_mse", mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
