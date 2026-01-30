@@ -24,30 +24,25 @@ class SwinV2Wrapper(pl.LightningModule):
     def __init__(self, args):
         super(SwinV2Wrapper, self).__init__()
         
-        self.wandb_project = args.wandb_project
-        
         # This makes args available as self.hparams
         self.save_hyperparameters(args)
         
-        # Get Swin V2 variant from args or use default
-        # Accept both 'small' and 'swinv2_small_window8_256' format
-        swin_v2_variant = getattr(args, 'swin_v2_variant', 'small')
-        # If full timm name provided, extract variant name
-        if swin_v2_variant.startswith('swinv2_'):
-            # Extract variant: 'swinv2_small_window8_256' -> 'small'
-            parts = swin_v2_variant.split('_')
-            if len(parts) >= 2:
-                swin_v2_variant = parts[1]  # 'small'
-        
-        pretrained = getattr(args, 'pretrained_backbone', False)
+        self.wandb_project = args.wandb_project
+        self.use_light_decoder = args.use_light_decoder
+        self.swin_v2_variant = args.swin_v2_variant
+        self.img_size = args.img_size
+        self.window_size = args.window_size
+        self.img_in_channels = args.img_in_channels
+        self.img_out_channels = args.img_out_channels
         
         self.model = SwinV2Pretrain(
-            variant=swin_v2_variant,
-            in_channels=args.img_in_channels,
-            out_channels=args.img_out_channels,
-            pretrained=pretrained,
-            img_size=tuple(args.img_size),
-            window_size=getattr(args, 'window_size', 12),
+            variant=self.swin_v2_variant,
+            in_channels=self.img_in_channels,
+            out_channels=self.img_out_channels,
+            img_size=self.img_size,
+            window_size=self.window_size,
+            use_light_decoder=self.use_light_decoder,
+            pretrained=getattr(args, 'pretrained_backbone', False),
             drop_rate=getattr(args, 'drop_rate', 0.0),
             attn_drop_rate=getattr(args, 'attn_drop_rate', 0.0),
             drop_path_rate=getattr(args, 'drop_path_rate', 0.0),
@@ -175,20 +170,13 @@ class SwinV2Wrapper(pl.LightningModule):
         # Load state dict
         state_dict = checkpoint['state_dict']
         
-        # Filter state dict: keep only model components
-        # Handle both old and new naming conventions
-        filtered = {}
-        for k, v in state_dict.items():
-            # New naming: model.backbone, model.mask_token, model.light_decoder
-            if k.startswith('model.'):
-                filtered[k] = v
-            # Old naming compatibility: swin_model.*
-            elif k.startswith('swin_model.'):
-                # Map old names to new names
-                new_key = k.replace('swin_model.', 'model.')
-                filtered[new_key] = v
-        
-        model.load_state_dict(filtered, strict=False)
+        # If self.use_light_decoder is False, then remove the light_decoder from the state dict
+        if not kwargs['args'].use_light_decoder:
+            keys_to_remove = [k for k in state_dict.keys() if k.startswith('model.light_decoder')]
+            for k in keys_to_remove:
+                del state_dict[k]
+
+        model.load_state_dict(state_dict, strict=False)
         
         return model
 

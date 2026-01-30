@@ -44,7 +44,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         self.eurasia_orography_std = np.load(os.path.join(root_dir_era5, "statistics", "forcing_std.npy"))
 
         # 2. Open Datasets (Lazy Xarray)
-        self.era5_ds = xr.open_dataset(era5_path, engine="h5netcdf").sortby('latitude')
+        self.era5_ds = xr.open_dataset(era5_path, engine="h5netcdf").sortby('latitude') #wrong order in saved file
         self.cerra_ds = xr.open_dataset(cerra_path, engine="h5netcdf")
         
         # 3. Load Static Data into RAM (Optimization)
@@ -54,10 +54,10 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         self.cerra_orography = (raw_static_cerra - self.eurasia_orography_mean) / self.eurasia_orography_std
         ds_static_cerra.close()
         
-        ds_static_era5 = xr.open_dataset(era5_orography_path, engine="h5netcdf")
-        raw_static_era5 = ds_static_era5['orog'].values.astype(np.float32)
+        ds_static_era5 = xr.open_dataset(era5_orography_path, engine="h5netcdf").sortby('latitude') #wrong order in saved file
+        raw_static_era5 = ds_static_era5['geopotential'].values.astype(np.float32)
+        raw_static_era5 = raw_static_era5[np.newaxis, :, :] #add channel dimension, which is already present in cerra
         self.era5_orography = (raw_static_era5 - self.eurasia_orography_mean) / self.eurasia_orography_std
-        ds_static_era5.close()
         ds_static_era5.close()
 
 

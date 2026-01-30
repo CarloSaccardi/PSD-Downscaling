@@ -10,14 +10,15 @@ from lightning_fabric.utilities import seed
 
 # First-party
 from src.utils import utils
-from src.models import UNetWrapper, DiffusionWrapper
+from src.models import UNetWrapper, DiffusionWrapper, GeoUNetWrapper
 from src.data import CerraEra5SuperResDataset
 import os
 import yaml
 
 MODELS = {
     "UNet-CNN": UNetWrapper,
-    "Diffusion": DiffusionWrapper
+    "Diffusion": DiffusionWrapper,
+    "GeoUNet": GeoUNetWrapper
 }
 
 
@@ -388,7 +389,7 @@ def main(args):
             test_loader.dataset.close()
     else:
         
-        regions = ["Iberia", "Scandinavia", "CentralEurope"]
+        regions = ["Iberia", "CentralEurope"]
         train_dataset_list = []
         val_dataset_list = []
 
@@ -398,7 +399,7 @@ def main(args):
                 args.dataset_cerra,
                 args.dataset_era5,
                 region=region,
-                split="train",
+                split="test",
             )
             
             dataset_region_val = CerraEra5SuperResDataset(

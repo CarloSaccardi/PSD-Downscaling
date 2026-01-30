@@ -16,7 +16,7 @@ import torch.utils.data
 def create_args():
     """Create args object with necessary parameters for model loading."""
     args = Namespace()
-    args.img_in_channels = 11
+    args.img_in_channels = 7
     args.img_out_channels = 6
     args.img_size = [96, 96]
     args.swin_v2_variant = 'base'
