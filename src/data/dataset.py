@@ -21,19 +21,26 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
     def __init__(self, 
                  root_dir_cerra,
                  root_dir_era5,
+                 root_dir_conditions,
                  split,
                  region,
+                 conditioning,
+                 crop_size=None,
                  era5_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'], 
-                 cerra_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp']):
+                 cerra_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp'],
+                 conditions_vars=['u10', 'v10', 't2m', 'sshf', 'zust', 'sp']):
         super().__init__()
         
         self.era5_vars = era5_vars
         self.cerra_vars = cerra_vars
-        
+        self.conditions_vars = conditions_vars
+        self.crop_size = crop_size
+        self.conditioning = conditioning
         # Paths
         era5_path = os.path.join(root_dir_era5, split, f"{region}.nc")
         cerra_path = os.path.join(root_dir_cerra, split, f"{region}.nc")
-        era5_orography_path = os.path.join(root_dir_era5, split, f"static_{region}.nc")
+        conditions_path = os.path.join(root_dir_conditions, split, f"{region}.nc")
+        conditions_orography_path = os.path.join(root_dir_conditions, split, f"static_{region}.nc")
         cerra_orography_path = os.path.join(root_dir_cerra, split, f"static_{region}.nc")
         
         # 1. Load Statistics
@@ -45,21 +52,28 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
 
         # 2. Open Datasets (Lazy Xarray)
         self.era5_ds = xr.open_dataset(era5_path, engine="h5netcdf").sortby('latitude') #wrong order in saved file
+        self.conditions_ds = xr.open_dataset(conditions_path, engine="h5netcdf").sortby('latitude')
         self.cerra_ds = xr.open_dataset(cerra_path, engine="h5netcdf")
         
         # 3. Load Static Data into RAM (Optimization)
         # We perform the static normalization ONCE here to save CPU cycles in __getitem__
         ds_static_cerra = xr.open_dataset(cerra_orography_path, engine="h5netcdf")
         raw_static_cerra = ds_static_cerra['orog'].values.astype(np.float32)
-        self.cerra_orography = (raw_static_cerra - self.eurasia_orography_mean) / self.eurasia_orography_std
+        self.cerra_orography = torch.from_numpy((raw_static_cerra - self.eurasia_orography_mean) / self.eurasia_orography_std)
         ds_static_cerra.close()
         
-        ds_static_era5 = xr.open_dataset(era5_orography_path, engine="h5netcdf").sortby('latitude') #wrong order in saved file
-        raw_static_era5 = ds_static_era5['geopotential'].values.astype(np.float32)
-        raw_static_era5 = raw_static_era5[np.newaxis, :, :] #add channel dimension, which is already present in cerra
-        self.era5_orography = (raw_static_era5 - self.eurasia_orography_mean) / self.eurasia_orography_std
-        ds_static_era5.close()
-
+        ds_static_conditions = xr.open_dataset(conditions_orography_path, engine="h5netcdf").sortby('latitude')
+        raw_static_conditions = ds_static_conditions['geopotential'].values.astype(np.float32)
+        self.conditions_orography = torch.from_numpy((raw_static_conditions - self.eurasia_orography_mean) / self.eurasia_orography_std).unsqueeze(0)
+        ds_static_conditions.close()
+        
+        # 4. Get dimensions
+        self.lat_len = len(self.cerra_ds.latitude)
+        self.lon_len = len(self.cerra_ds.longitude)
+        
+        # 6. Pre-calculate max indices for random cropping
+        self.max_lat_idx = self.lat_len - self.crop_size
+        self.max_lon_idx = self.lon_len - self.crop_size
 
     def __len__(self):
         time_axis = self.era5_ds.time.values
@@ -68,26 +82,61 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         
-        # 1. Load ERA5 and CERRA 
-        # ERA5: [C_era5, 96, 96]
-        era5 = self._load_dynamic_step(self.era5_ds, self.era5_vars, idx)
-        # CERRA: [C_cerra, 384, 384]
-        cerra = self._load_dynamic_step(self.cerra_ds, self.cerra_vars, idx)
+        cerra = torch.from_numpy(self._load_dynamic_step(self.cerra_ds, self.cerra_vars, idx))
+        era5 = torch.from_numpy(self._load_dynamic_step(self.era5_ds, self.era5_vars, idx))
+        
+        era5 = F.interpolate(era5.unsqueeze(0), 
+                             size=(cerra.shape[-1], cerra.shape[-1]), 
+                             mode='bicubic', 
+                             align_corners=False).squeeze(0)
         
         # 2. Normalize Dynamic Data
         era5 = (era5 - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
         cerra = (cerra - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
+        cerra_orography = (self.cerra_orography - self.eurasia_orography_mean) / self.eurasia_orography_std
         
-        # 3. Load cerra orography
-        cerra_orography = torch.from_numpy(self.cerra_orography[None, :, :]).float().squeeze(0) #remove first dimension
+        # 3. concatenate conditions with conditions orography 
+        era5 =torch.cat([era5, cerra_orography], dim=0)
         
-        return era5, cerra, cerra_orography, self.era5_orography
+        if self.crop_size is not None:
+            lat_idx, lon_idx = self._get_random_crop_indices()
+            era5 = self._crop_data(era5, lat_idx, lon_idx)
+            cerra = self._crop_data(cerra, lat_idx, lon_idx)
+            cerra_orography = self._crop_data(cerra_orography, lat_idx, lon_idx)
+            
+        if self.conditioning:
+            conditions = torch.from_numpy(self._load_dynamic_step(self.conditions_ds, self.conditions_vars, idx))
+            conditions = (conditions - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
+            conditions = torch.cat([conditions, self.conditions_orography], axis=0)
+        else:
+            conditions = None
+        
+        
+        return era5, cerra, conditions
     
 
     def _load_dynamic_step(self, dataset, variables, idx):
         """Lazy load specific time step."""
         data_sel = dataset[variables].isel(time=idx)
         return data_sel.to_array().values.astype(np.float32)
+    
+    # --- Helper Functions ---
+
+    def _get_random_crop_indices(self):
+        """Returns random starting indices for a latitude and longitude."""
+        # Sample crop center uniformly across the full grid, then clamp
+        lat_idx = np.random.randint(0, self.max_lat_idx + 1)
+        lon_idx = np.random.randint(0, self.max_lon_idx + 1)
+        return lat_idx, lon_idx
+
+    def _crop_data(self, dataset,lat_idx, lon_idx):
+        """Crops the static data (already in RAM)."""
+        data_crop = dataset[
+            :,
+            lat_idx : lat_idx + self.crop_size,
+            lon_idx : lon_idx + self.crop_size
+        ]
+        return data_crop
 
     
     def close(self):

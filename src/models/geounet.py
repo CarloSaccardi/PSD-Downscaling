@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from src.models.swin import SwinV2Wrapper
 from argparse import Namespace
 from src.data.dataset import MaskGenerator
+from typing import List
 
 
 network_module = importlib.import_module("physicsnemo.models.diffusion")
@@ -35,6 +36,7 @@ class GeoUNetWrapper(pl.LightningModule):
         self.wandb_project = args.wandb_project
         self.savepreds_path = args.savepreds_path
         self.load = args.load
+        self.swin_pretrained_checkpoint = args.swin_pretrained_checkpoint
         ### Generate fixed mask array filled with zeros
         self.mask_generator = MaskGenerator(
             input_size=args.cond_size[0],
@@ -48,10 +50,11 @@ class GeoUNetWrapper(pl.LightningModule):
         #########################################################
         
         ### Load pretrained SwinV2 model
-        self.swin_pretrained = SwinV2Wrapper.load_from_checkpoint(args.swin_pretrained_checkpoint, args=self.create_args(args))
-        for param in self.swin_pretrained.parameters():
-            param.requires_grad = False
-        self.swin_pretrained.eval()
+        if self.swin_pretrained_checkpoint is not None:
+            self.swin_pretrained = SwinV2Wrapper.load_from_checkpoint(args.swin_pretrained_checkpoint, args=self.create_args(args))
+            for param in self.swin_pretrained.parameters():
+                param.requires_grad = False
+            self.swin_pretrained.eval()
         #########################################################
         
         self.model_kwargs = {
@@ -94,6 +97,7 @@ class GeoUNetWrapper(pl.LightningModule):
     def forward(
         self,
         x: torch.Tensor,
+        conditions: List[torch.Tensor],
         **model_kwargs: dict,
     ) -> torch.Tensor:
         """
@@ -102,17 +106,23 @@ class GeoUNetWrapper(pl.LightningModule):
 
         D_x = self.model(
             x, 
+            conditions,
             torch.zeros(x.shape[0], device=x.device),  
-            class_labels=None,
+            None,
             **model_kwargs,
         )
         return D_x.to(torch.float32)
 
     def training_step(self, batch, *args):
-        era5, cerra, cerra_orography = batch
-        era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
-        x = torch.cat([era5, cerra_orography], dim=1)
-        D_x = self(x)
+        era5, cerra, conditions = batch
+        
+        if self.swin_pretrained_checkpoint is not None:
+            features_list, _ = self.swin_pretrained(conditions, self.zero_mask.to(conditions.device))
+        else:
+            features_list = None
+            
+        D_x = self(era5, features_list)
+        
         loss = F.mse_loss(D_x, cerra)
         
         log_dict = {
@@ -124,11 +134,14 @@ class GeoUNetWrapper(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, *args):        
-        era5, cerra, cerra_orography, era5_orography = batch
-        condition = torch.cat([era5, era5_orography], dim=1)
+        era5, cerra, conditions = batch
         
-        features_list, _ = self.swin_pretrained(condition, self.zero_mask.to(condition.device))
-        D_x = self(cerra_orography, features_list)
+        if self.swin_pretrained_checkpoint is not None:
+            features_list, _ = self.swin_pretrained(conditions, self.zero_mask.to(conditions.device))
+        else:
+            features_list = None
+            
+        D_x = self(era5, features_list)
         
         val_loss = F.mse_loss(D_x, cerra)
         

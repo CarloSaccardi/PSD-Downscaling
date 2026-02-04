@@ -27,6 +27,7 @@ from .layers import (
     ConditionalGroupNorm,
 )
 from .song_unet import SongUNet, SongUNetPosEmbd, SongUNetPosLtEmbd, SongUNetCarlo, SongUNetPosEmbdCarlo
+from .geo_diff import GeoUNet, GeoUNetPosEmbd
 from .dhariwal_unet import DhariwalUNet
 from .unet import UNet, StormCastUNet
 from .preconditioning import (

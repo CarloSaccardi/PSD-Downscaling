@@ -51,6 +51,13 @@ def get_args():
         "(default: meps_example)",
     )
     parser.add_argument(
+        "--dataset_conditions",
+        type=str,
+        default="/aspire/CarloData/MASK_GNN_DATA/CONDITIONS_60_n2_40_18",
+        help="Dataset, corresponding to name in data directory "
+        "(default: meps_example)",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default="graph_efm",
@@ -135,6 +142,12 @@ def get_args():
         type=list,
         default=[300, 300],
         help="Resolution of the input images",
+    )
+    parser.add_argument(
+        "--crop_size",
+        type=int,
+        default=None,
+        help="Crop size for the input images",
     )
     ########################################################
     # MODEL #
@@ -374,8 +387,11 @@ def main(args):
             test_dataset = CerraEra5SuperResDataset(
                 args.dataset_cerra,
                 args.dataset_era5,
+                args.dataset_conditions,
                 region=region,
                 split="test",
+                conditioning = True if args.swin_pretrained_checkpoint is not None else False,
+                crop_size=args.crop_size,
             )
 
             test_loader = torch.utils.data.DataLoader(  
@@ -398,15 +414,21 @@ def main(args):
             dataset_region_train = CerraEra5SuperResDataset(
                 args.dataset_cerra,
                 args.dataset_era5,
+                args.dataset_conditions,
                 region=region,
                 split="test",
+                conditioning = True if args.swin_pretrained_checkpoint is not None else False,
+                crop_size=args.crop_size,
             )
             
             dataset_region_val = CerraEra5SuperResDataset(
                 args.dataset_cerra,
                 args.dataset_era5,
+                args.dataset_conditions,
                 region=region,
                 split="val",
+                conditioning = True if args.swin_pretrained_checkpoint is not None else False,
+                crop_size=args.crop_size,
             )
             
             train_dataset_list.append(dataset_region_train)
