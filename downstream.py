@@ -405,7 +405,7 @@ def main(args):
             test_loader.dataset.close()
     else:
         
-        regions = ["Iberia", "CentralEurope"]
+        regions = ["Scandinavia", "CentralEurope"]
         train_dataset_list = []
         val_dataset_list = []
 
@@ -416,7 +416,7 @@ def main(args):
                 args.dataset_era5,
                 args.dataset_conditions,
                 region=region,
-                split="test",
+                split="train",
                 conditioning = True if args.swin_pretrained_checkpoint is not None else False,
                 crop_size=args.crop_size,
             )

@@ -3,15 +3,16 @@
 # =========================
 dataset_cerra: "/projects/0/prjs0951/Carlo/zz_processed_data/CERRA"
 dataset_era5: "/projects/0/prjs0951/Carlo/zz_processed_data/ERA5"
-model: UNet-CNN                   # Model architecture
+dataset_conditions: "/projects/0/prjs0951/Carlo/zz_processed_data/CONDITIONS"
+model: GeoUNet                   # Model architecture
 subset_ds: 0                      # 0 = full dataset, >0 = subset size
 seed: 32
-n_workers: 16                     # Dataloader workers
+n_workers: 1                     # Dataloader workers
 load: null
 restore_opt: 1                    # 0 = do not restore optimizer
 precision: "16-mixed"             # 32 | 16 | 16-mixed | bf16
 eval: null                        # val | test | null → train
-wandb_project: UNet-Cnn-psdLoss
+wandb_project: GeoUNet
 run_name: UNet-CNN                # Optional run name
 regression_net: null
 gridtype: null
@@ -20,15 +21,14 @@ num_ensembles: 32
 output_variables: null            # List of vars to predict
 save_preds_path: null
 resume: null
-swin_pretrained_checkpoint: null #saved_models/pre-trained-SwinV2/min_val_loss.ckpt
-
 # =========================
 # DATASET SETTINGS
 # =========================
-img_in_channels: 11
+img_in_channels: 7
 img_out_channels: 6
-img_resolution: [384, 384]
-dataset_type: CerraEra5SuperRes
+img_resolution: [96, 96]
+cond_size: [96, 96]
+crop_size: 96
 # =========================
 # MODEL SETTINGS
 # =========================
@@ -37,16 +37,28 @@ embedding_type: zero
 model_channels: 64
 channel_mult: [1, 2, 2]
 attn_resolutions: [16]
-model_type: SongUNetPosEmbd
+model_type: GeoUNetPosEmbd
 checkpoint_level: 0
-
+# =========================
+# SWIN SETTINGS
+# =========================
+swin_v2_variant: base
+use_light_decoder: False
+swin_pretrained_checkpoint: "saved_models/Swin-V2-80-Swin-V2-02_03_00-2235/min_val_loss.ckpt"
+window_size: 6
+drop_rate: 0.0
+attn_drop_rate: 0.0
+drop_path_rate: 0.0
+mask_ratio: 0.0
+model_patch_size: 2
+mask_patch_size: 12
 # =========================
 # TRAINING SETTINGS
 # =========================
 val_interval: 1
 lr: 2.0e-4
-epochs: 300
-batch_size: 16
+epochs: 1000
+batch_size: 256
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null         # Set a number to enable clipping
