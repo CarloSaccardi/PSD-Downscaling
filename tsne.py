@@ -16,7 +16,7 @@ import torch.utils.data
 def create_args():
     """Create args object with necessary parameters for model loading."""
     args = Namespace()
-    args.img_in_channels = 11
+    args.img_in_channels = 7
     args.img_out_channels = 6
     args.img_size = [96, 96]
     args.swin_v2_variant = 'base'
@@ -174,7 +174,7 @@ def plot_tsne(features, level_idx, output_path, n_samples=5000, region_labels=No
     print(f"  Input shape: {features.shape}")
     
     # Apply t-SNE
-    tsne = TSNE(n_components=2, random_state=42, perplexity=30, n_iter=1000)
+    tsne = TSNE(n_components=2, random_state=42, perplexity=30, max_iter=1000)
     features_2d = tsne.fit_transform(features)
     
     # Create plot
@@ -210,8 +210,8 @@ def plot_tsne(features, level_idx, output_path, n_samples=5000, region_labels=No
 
 def main():
     # Configuration
-    checkpoint_path = "saved_models/pre-trained-SwinV2/min_val_loss.ckpt"
-    dataset_path = "/aspire/CarloData/CERRA-ERA5-processing/zz_processed_data/CONDITIONS"
+    checkpoint_path = "saved_models/Swin-V2-70-Swin-V2-02_03_00-5241/min_val_loss.ckpt"
+    dataset_path = "/projects/0/prjs0951/Carlo/zz_processed_data/CONDITIONS"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_samples = 1000  # Number of samples to extract features from
     
@@ -233,7 +233,7 @@ def main():
     # Create dataloader
     print("Creating dataloader...")
     
-    regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey", "NordAfrica"]
+    regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey"]
     train_dataset_list = []
 
     for region in regions:
@@ -241,7 +241,7 @@ def main():
             path=dataset_path,
             split="test",
             mask_ratio=0.0,
-            model_patch_size=4,
+            model_patch_size=2,
             mask_patch_size=12,
             crop_size=96,
             region=region,
