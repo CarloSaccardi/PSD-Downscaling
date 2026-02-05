@@ -37,6 +37,16 @@ def get_args():
         help="Path to YAML config file (e.g., yaml_configs/good_runs/UNet/UNet_test.yaml)",
     )
     parser.add_argument(
+        "--override",
+        action="append",
+        default=[],
+        help=(
+            "Override config/CLI values using key=value pairs. "
+            "Can be repeated. Values are parsed as YAML "
+            "(e.g., --override lr=1e-4 --override channel_mult=[1,2,2])"
+        ),
+    )
+    parser.add_argument(
         "--dataset_cerra",
         type=str,
         default="/aspire/CarloData/MASK_GNN_DATA/CERRA_interpolated_300x300",
@@ -288,9 +298,23 @@ def get_args():
         default=None,
         help="Path to resume training from (default: None)",
     )
+    parser.add_argument(
+        "--swin_pretrained_checkpoint",
+        type=str,
+        default=None,
+        help="Path to swin pretrained checkpoint (default: None)",
+    )
 
     
-    return parser.parse_args()
+    args, _ = parser.parse_known_args()
+    if args.config is not None:
+        with open(str(args.config), "r") as f:
+            config = yaml.safe_load(f) or {}
+        parser.set_defaults(**config)
+    args = parser.parse_args()
+    if args.override:
+        update_args(args, parse_overrides(args.override))
+    return args
 
 def main(args):
     # Asserts for arguments
@@ -468,14 +492,17 @@ def update_args(args, config_dict):
         setattr(args, key, val)  
   
 
+def parse_overrides(override_list):
+    overrides = {}
+    for item in override_list:
+        if "=" not in item:
+            raise ValueError(f"Override must be in key=value format: {item}")
+        key, raw_value = item.split("=", 1)
+        overrides[key] = yaml.safe_load(raw_value)
+    return overrides
+
+
 if __name__ == '__main__':
     
     args = get_args()
-
-    if args.config is not None:
-
-        with open(str(args.config), "r") as f:
-            config = yaml.safe_load(f)
-        update_args(args, config)
-
     main(args)

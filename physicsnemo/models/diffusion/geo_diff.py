@@ -173,6 +173,7 @@ class GeoUNet(Module):
         act: str = "silu",
         profile_mode: bool = False,
         amp_mode: bool = False,
+        swin_pretrained_checkpoint: str = None,
     ):
         valid_embedding_types = ["fourier", "positional", "zero"]
         if embedding_type not in valid_embedding_types:
@@ -392,19 +393,21 @@ class GeoUNet(Module):
                     amp_mode=amp_mode,
                     **init_zero,
                 )
-                
-        # Inside __init__, after self.dec is defined:
-        self.cross_attn = torch.nn.ModuleDict()
-        # Update these values to match your Swin V2's hierarchical channel counts
-        swin_dims = {48: 128, 24: 256, 12: 512, 6: 1024} 
+           
+           
+        if swin_pretrained_checkpoint is not None:
+            # Inside __init__, after self.dec is defined:
+            self.cross_attn = torch.nn.ModuleDict()
+            # Update these values to match your Swin V2's hierarchical channel counts
+            swin_dims = {48: 128, 24: 256, 12: 512, 6: 1024} 
 
-        for level, mult in enumerate(channel_mult):
-            res = self.img_shape_y >> level
-            if res in swin_dims:
-                self.cross_attn[f"dec_attn_{res}x{res}"] = CrossAttentionBlock(
-                    query_dim=model_channels * mult, 
-                    context_dim=swin_dims[res]
-                )
+            for level, mult in enumerate(channel_mult):
+                res = self.img_shape_y >> level
+                if res in swin_dims:
+                    self.cross_attn[f"dec_attn_{res}x{res}"] = CrossAttentionBlock(
+                        query_dim=model_channels * mult, 
+                        context_dim=swin_dims[res]
+                    )
 
     def forward(self, x, features, noise_labels, class_labels, augment_labels=None):
         with nvtx.annotate(

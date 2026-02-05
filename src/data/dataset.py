@@ -109,7 +109,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
             conditions = (conditions - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
             conditions = torch.cat([conditions, self.conditions_orography], axis=0)
         else:
-            conditions = None
+            conditions = torch.tensor([0.0])
         
         
         return era5, cerra, conditions

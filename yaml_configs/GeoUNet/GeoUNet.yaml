@@ -7,13 +7,13 @@ dataset_conditions: "/projects/0/prjs0951/Carlo/zz_processed_data/CONDITIONS"
 model: GeoUNet                   # Model architecture
 subset_ds: 0                      # 0 = full dataset, >0 = subset size
 seed: 32
-n_workers: 1                     # Dataloader workers
+n_workers: 64                     # Dataloader workers
 load: null
 restore_opt: 1                    # 0 = do not restore optimizer
 precision: "16-mixed"             # 32 | 16 | 16-mixed | bf16
 eval: null                        # val | test | null → train
 wandb_project: GeoUNet
-run_name: UNet-CNN                # Optional run name
+run_name: GeoUNet
 regression_net: null
 gridtype: null
 hr_mean_conditioning: true
@@ -37,14 +37,14 @@ embedding_type: zero
 model_channels: 64
 channel_mult: [1, 2, 2]
 attn_resolutions: [16]
-model_type: GeoUNetPosEmbd
+model_type: GeoUNet
 checkpoint_level: 0
 # =========================
 # SWIN SETTINGS
 # =========================
 swin_v2_variant: base
 use_light_decoder: False
-swin_pretrained_checkpoint: "saved_models/Swin-V2-80-Swin-V2-02_03_00-2235/min_val_loss.ckpt"
+swin_pretrained_checkpoint: null
 window_size: 6
 drop_rate: 0.0
 attn_drop_rate: 0.0
@@ -58,7 +58,7 @@ mask_patch_size: 12
 val_interval: 1
 lr: 2.0e-4
 epochs: 1000
-batch_size: 256
+batch_size: 64
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null         # Set a number to enable clipping

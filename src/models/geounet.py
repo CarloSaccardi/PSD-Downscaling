@@ -44,9 +44,9 @@ class GeoUNetWrapper(pl.LightningModule):
             model_patch_size=args.model_patch_size,
             mask_ratio=args.mask_ratio
         )
-        zero_mask = self.mask_generator()
-        zero_mask = torch.from_numpy(zero_mask)
-        self.zero_mask = zero_mask.unsqueeze(0).expand(args.batch_size, -1, -1) #from (H, W) to (batch, H, W)
+        # Always keep a zero mask (no masking) and expand per batch at runtime.
+        zero_mask = torch.zeros_like(torch.from_numpy(self.mask_generator())).float()
+        self.register_buffer("zero_mask_base", zero_mask, persistent=False)
         #########################################################
         
         ### Load pretrained SwinV2 model
@@ -59,7 +59,8 @@ class GeoUNetWrapper(pl.LightningModule):
         
         self.model_kwargs = {
             'checkpoint_level': args.checkpoint_level,
-            'N_grid_channels': args.N_grid_channels,
+            # 'N_grid_channels': args.N_grid_channels,
+            'swin_pretrained_checkpoint': args.swin_pretrained_checkpoint,
             'embedding_type': args.embedding_type,
             'model_channels': args.model_channels,
             'channel_mult': args.channel_mult,
@@ -69,7 +70,7 @@ class GeoUNetWrapper(pl.LightningModule):
         model_class = getattr(network_module, args.model_type)
         self.model = model_class(
             img_resolution=args.img_resolution,
-            in_channels=args.img_in_channels + args.N_grid_channels,
+            in_channels=args.img_in_channels, #+ args.N_grid_channels,
             out_channels=args.img_out_channels,
             **self.model_kwargs,
         )
@@ -117,7 +118,9 @@ class GeoUNetWrapper(pl.LightningModule):
         era5, cerra, conditions = batch
         
         if self.swin_pretrained_checkpoint is not None:
-            features_list, _ = self.swin_pretrained(conditions, self.zero_mask.to(conditions.device))
+            zero_mask = self.zero_mask_base.to(device=conditions.device, dtype=conditions.dtype)
+            zero_mask = zero_mask.unsqueeze(0).expand(conditions.shape[0], -1, -1)
+            features_list, _ = self.swin_pretrained(conditions, zero_mask)
         else:
             features_list = None
             
@@ -137,7 +140,9 @@ class GeoUNetWrapper(pl.LightningModule):
         era5, cerra, conditions = batch
         
         if self.swin_pretrained_checkpoint is not None:
-            features_list, _ = self.swin_pretrained(conditions, self.zero_mask.to(conditions.device))
+            zero_mask = self.zero_mask_base.to(device=conditions.device, dtype=conditions.dtype)
+            zero_mask = zero_mask.unsqueeze(0).expand(conditions.shape[0], -1, -1)
+            features_list, _ = self.swin_pretrained(conditions, zero_mask)
         else:
             features_list = None
             
