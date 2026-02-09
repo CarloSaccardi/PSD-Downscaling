@@ -11,7 +11,7 @@ from lightning_fabric.utilities import seed
 # First-party
 from src.utils import utils
 from src.models import UNetWrapper, DiffusionWrapper, GeoUNetWrapper
-from src.data import CerraEra5SuperResDataset
+from src.data import CerraEra5SuperResDataset, CerraEra5InferenceDataset
 import os
 import yaml
 
@@ -404,11 +404,11 @@ def main(args):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
 
     if args.eval:
-        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "EasternEurope"]
+        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey"]
         
         for region in regions:
             # Load data
-            test_dataset = CerraEra5SuperResDataset(
+            test_dataset = CerraEra5InferenceDataset(
                 args.dataset_cerra,
                 args.dataset_era5,
                 args.dataset_conditions,

@@ -93,16 +93,17 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         # 2. Normalize Dynamic Data
         era5 = (era5 - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
         cerra = (cerra - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
-        cerra_orography = (self.cerra_orography - self.eurasia_orography_mean) / self.eurasia_orography_std
         
         # 3. concatenate conditions with conditions orography 
-        era5 =torch.cat([era5, cerra_orography], dim=0)
+        era5 =torch.cat([era5, self.cerra_orography], dim=0)
         
         if self.crop_size is not None:
             lat_idx, lon_idx = self._get_random_crop_indices()
-            era5 = self._crop_data(era5, lat_idx, lon_idx)
-            cerra = self._crop_data(cerra, lat_idx, lon_idx)
-            cerra_orography = self._crop_data(cerra_orography, lat_idx, lon_idx)
+            era5_out = self._crop_data(era5, lat_idx, lon_idx)
+            cerra_out = self._crop_data(cerra, lat_idx, lon_idx)
+        else:
+            era5_out = era5
+            cerra_out = cerra
             
         if self.conditioning:
             conditions = torch.from_numpy(self._load_dynamic_step(self.conditions_ds, self.conditions_vars, idx))
@@ -112,7 +113,7 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
             conditions = torch.tensor([0.0])
         
         
-        return era5, cerra, conditions
+        return era5_out, cerra_out, conditions
     
 
     def _load_dynamic_step(self, dataset, variables, idx):
@@ -142,6 +143,60 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
     def close(self):
         if self.era5_ds: self.era5_ds.close()
         if self.cerra_ds: self.cerra_ds.close()
+    
+    
+    
+class CerraEra5InferenceDataset(CerraEra5SuperResDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Only calculate grid stats if we are actually cropping/tiling
+        if self.crop_size is not None:
+            self.grid_size = 384 // self.crop_size
+            self.num_patches = self.grid_size ** 2
+        else:
+            self.grid_size = 1
+            self.num_patches = 1
+
+    def __getitem__(self, idx):
+        # 1. Load full-size dynamic data (384x384)
+        cerra = torch.from_numpy(self._load_dynamic_step(self.cerra_ds, self.cerra_vars, idx))
+        era5 = torch.from_numpy(self._load_dynamic_step(self.era5_ds, self.era5_vars, idx))
+        
+        # 2. Upsample ERA5 to CERRA resolution
+        era5 = F.interpolate(era5.unsqueeze(0), 
+                             size=(cerra.shape[-1], cerra.shape[-1]), 
+                             mode='bicubic', 
+                             align_corners=False).squeeze(0)
+        
+        # 3. Normalize & Add Static Orography
+        era5 = (era5 - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
+        cerra = (cerra - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
+        era5 = torch.cat([era5, self.cerra_orography], dim=0)
+
+        # 4. TILE ONLY IF CROP_SIZE EXISTS
+        if self.crop_size is not None:
+            era5_out = self._tile_image(era5)
+            cerra_out = self._tile_image(cerra)
+        else:
+            era5_out = era5
+            cerra_out = cerra
+
+        # 5. Handle Conditions
+        if self.conditioning:
+            conditions = torch.from_numpy(self._load_dynamic_step(self.conditions_ds, self.conditions_vars, idx))
+            conditions = (conditions - self.eurasia_mean[:, None, None]) / self.eurasia_std[:, None, None]
+            conditions = torch.cat([conditions, self.conditions_orography], axis=0)
+        else:
+            conditions = torch.tensor([0.0])
+        
+        return era5_out, cerra_out, conditions
+
+    def _tile_image(self, img):
+        channels = img.shape[0]
+        patches = img.unfold(1, self.crop_size, self.crop_size).unfold(2, self.crop_size, self.crop_size)
+        patches = patches.permute(1, 2, 0, 3, 4).contiguous()
+        return patches.view(-1, channels, self.crop_size, self.crop_size)
     
     
     

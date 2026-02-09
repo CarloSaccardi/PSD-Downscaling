@@ -57,7 +57,7 @@ mask_patch_size: 12
 # =========================
 val_interval: 1
 lr: 2.0e-4
-epochs: 1000
+epochs: 5000
 batch_size: 64
 lr_decay: 1
 lr_rampup: 0

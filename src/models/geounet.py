@@ -170,23 +170,83 @@ class GeoUNetWrapper(pl.LightningModule):
     
     
     def test_step(self, batch, batch_idx):
-        era5, cerra, cerra_orography = batch
-        era5 = F.interpolate(era5, size=(cerra.shape[-1], cerra.shape[-1]), mode='bicubic', align_corners=False)
-        x = torch.cat([era5, cerra_orography], dim=1)
-        D_x = self(x)
-        mse = F.mse_loss(D_x, cerra)
-        mae = F.l1_loss(D_x, cerra)
+        # batch size is 1. Shapes: 
+        # era5_patches: [1, 16, C, 96, 96]
+        # cerra_patches: [1, 16, C, 96, 96]
+        # conditions: [1, C_cond, 384, 384]
+        era5_patches, cerra_patches, conditions = batch
+        
+        era5_patches = era5_patches.squeeze(0)   # [16, C, 96, 96]
+        cerra_patches = cerra_patches.squeeze(0) # [16, C, 96, 96]
+
+        # 1. Process Global Context (Swin) once per image
+        if self.swin_pretrained_checkpoint is not None:
+            zero_mask = self.zero_mask_base.to(device=conditions.device)
+            zero_mask = zero_mask.unsqueeze(0).expand(conditions.shape[0], -1, -1)
+            features_list, _ = self.swin_pretrained(conditions, zero_mask)
+        else:
+            features_list = None
+
+        # 2. Patch-wise Inference
+        outputs = []
+        for i in range(era5_patches.size(0)):
+            # Model forward pass for one patch
+            patch_out = self(era5_patches[i:i+1], features_list)
+            outputs.append(patch_out)
+        
+        # 3. Reassemble the patches into the full 384x384 grid
+        # Cat the list of [1, C, 96, 96] -> [16, C, 96, 96]
+        full_pred = self.reassemble(torch.cat(outputs, dim=0))
+        full_target = self.reassemble(cerra_patches)
+
+        # 4. Compute metrics on the FULL RECONSTRUCTED image
+        mse = F.mse_loss(full_pred, full_target)
+        mae = F.l1_loss(full_pred, full_target)
+
+        # 5. Log as before (Lightning handles the epoch-end aggregation automatically)
         self.log("test_mse", mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log("test_mae", mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+
         return {"test_mse": mse.detach(), "test_mae": mae.detach()}
+    
+    
+    def reassemble(self, patches):
+        """
+        Input: [16, C, 96, 96]
+        Output: [1, C, 384, 384]
+        """
+        C = patches.shape[1]
+        P = 96  # Patch size
+        G = 4   # Grid size (384/96)
+        
+        # 1. Reshape to grid: [4, 4, C, 96, 96]
+        out = patches.view(G, G, C, P, P)
+        # 2. Permute to align dimensions: [C, 4, 96, 4, 96]
+        out = out.permute(2, 0, 3, 1, 4).contiguous()
+        # 3. Combine grid and patch dims: [1, C, 384, 384]
+        return out.view(1, C, G * P, G * P)
+    
 
     def on_test_epoch_end(self):
-        """Print aggregated test metrics (already reduced by Lightning)."""
-        if self.trainer.is_global_zero:
-            mse = self.trainer.callback_metrics.get("test_mse", None)
-            mae = self.trainer.callback_metrics.get("test_mae", None)
-            if mse is not None and mae is not None:
-                print(f"Test MSE (epoch): {mse:.4f}, Test MAE (epoch): {mae:.4f}")
+        # 1. Concatenate all stored full-image samples
+        # Resulting shape: [Total_Samples, C, 384, 384]
+        all_preds = torch.cat([x["pred"] for x in self.test_step_outputs], dim=0)
+        all_targets = torch.cat([x["target"] for x in self.test_step_outputs], dim=0)
+
+        # 2. Compute Global Metrics
+        # Example: Global RMSE
+        global_mse = F.mse_loss(all_preds, all_targets)
+        global_rmse = torch.sqrt(global_mse)
+
+        # Example: Bias (Mean Error)
+        global_bias = torch.mean(all_preds - all_targets)
+
+        # 3. Logging
+        self.log("test_global_rmse", global_rmse, sync_dist=True)
+        self.log("test_global_bias", global_bias, sync_dist=True)
+
+        # 4. Clear memory for next time
+        self.test_step_outputs.clear()
     
     
     
