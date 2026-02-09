@@ -170,36 +170,36 @@ class GeoUNetWrapper(pl.LightningModule):
     
     
     def test_step(self, batch, batch_idx):
-        # batch size is 1. Shapes: 
-        # era5_patches: [1, 16, C, 96, 96]
-        # cerra_patches: [1, 16, C, 96, 96]
-        # conditions: [1, C_cond, 384, 384]
+        # era5_patches: [B, 16, C, 96, 96]
+        # cerra_patches: [B, 16, C, 96, 96]
+        # conditions: [B, C_cond, 384, 384]
         era5_patches, cerra_patches, conditions = batch
-        
-        era5_patches = era5_patches.squeeze(0)   # [16, C, 96, 96]
-        cerra_patches = cerra_patches.squeeze(0) # [16, C, 96, 96]
+        B = era5_patches.shape[0]
 
-        # 1. Process Global Context (Swin) once per image
+        # 1. Flatten patches: [B*16, C, 96, 96]
+        # This allows the model to see B*16 as the batch size
+        era5_flat = era5_patches.view(-1, *era5_patches.shape[2:]) 
+
+        # 2. Process Global Context
         if self.swin_pretrained_checkpoint is not None:
             zero_mask = self.zero_mask_base.to(device=conditions.device)
-            zero_mask = zero_mask.unsqueeze(0).expand(conditions.shape[0], -1, -1)
+            # Expand mask to current batch size B
+            zero_mask = zero_mask.unsqueeze(0).expand(B, -1, -1)
             features_list, _ = self.swin_pretrained(conditions, zero_mask)
+            features_list = [f.repeat_interleave(16, dim=0) for f in features_list]
         else:
             features_list = None
 
-        # 2. Patch-wise Inference
-        outputs = []
-        for i in range(era5_patches.size(0)):
-            # Model forward pass for one patch
-            patch_out = self(era5_patches[i:i+1], features_list)
-            outputs.append(patch_out)
-        
-        # 3. Reassemble the patches into the full 384x384 grid
-        # Cat the list of [1, C, 96, 96] -> [16, C, 96, 96]
-        full_pred = self.reassemble(torch.cat(outputs, dim=0))
-        full_target = self.reassemble(cerra_patches)
+        # 3. Vectorized Inference (No more for-loop!)
+        # era5_flat is [B*16, C, 96, 96]
+        # Ensure your forward method can handle the expanded features_list
+        full_pred_patches = self(era5_flat, features_list) 
 
-        # 4. Compute metrics on the FULL RECONSTRUCTED image
+        # 4. Reassemble for the whole batch
+        full_pred = self.reassemble(full_pred_patches, B)
+        full_target = self.reassemble(cerra_patches.view(-1, *cerra_patches.shape[2:]), B)
+
+        # 5. Metrics
         mse = F.mse_loss(full_pred, full_target)
         mae = F.l1_loss(full_pred, full_target)
 
@@ -210,21 +210,24 @@ class GeoUNetWrapper(pl.LightningModule):
         return {"test_mse": mse.detach(), "test_mae": mae.detach()}
     
     
-    def reassemble(self, patches):
+    def reassemble(self, patches, B):
         """
-        Input: [16, C, 96, 96]
-        Output: [1, C, 384, 384]
+        Input: [B*16, C, 96, 96]
+        Output: [B, C, 384, 384]
         """
         C = patches.shape[1]
         P = 96  # Patch size
-        G = 4   # Grid size (384/96)
+        G = 4   # Grid size (4x4 = 16 patches)
         
-        # 1. Reshape to grid: [4, 4, C, 96, 96]
-        out = patches.view(G, G, C, P, P)
-        # 2. Permute to align dimensions: [C, 4, 96, 4, 96]
-        out = out.permute(2, 0, 3, 1, 4).contiguous()
-        # 3. Combine grid and patch dims: [1, C, 384, 384]
-        return out.view(1, C, G * P, G * P)
+        # 1. Unflatten batch and grid: [B, G, G, C, 96, 96]
+        out = patches.view(B, G, G, C, P, P)
+        
+        # 2. Permute: [B, C, G(row), P(height), G(col), P(width)]
+        # Current: (0:B, 1:G_row, 2:G_col, 3:C, 4:P_h, 5:P_w)
+        out = out.permute(0, 3, 1, 4, 2, 5).contiguous()
+        
+        # 3. Combine: [B, C, 384, 384]
+        return out.view(B, C, G * P, G * P)
     
 
     def on_test_epoch_end(self):

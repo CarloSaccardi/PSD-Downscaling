@@ -406,6 +406,8 @@ def main(args):
     if args.eval:
         regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey"]
         
+        test_dataset_list = []
+        
         for region in regions:
             # Load data
             test_dataset = CerraEra5InferenceDataset(
@@ -417,16 +419,21 @@ def main(args):
                 conditioning = True if args.swin_pretrained_checkpoint is not None else False,
                 crop_size=args.crop_size,
             )
-
-            test_loader = torch.utils.data.DataLoader(  
-                test_dataset,
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
             
-            trainer.test(model, dataloaders=test_loader)
-            test_loader.dataset.close()
+            test_dataset_list.append(test_dataset)
+            
+        test_dataset = torch.utils.data.ConcatDataset(test_dataset_list)
+
+        test_loader = torch.utils.data.DataLoader(  
+            test_dataset,
+            args.batch_size,
+            shuffle=False,
+            num_workers=args.n_workers,
+        )
+        
+        trainer.test(model, dataloaders=test_loader)
+        test_loader.dataset.close()
+        
     else:
         
         regions = ["Scandinavia", "CentralEurope"]
