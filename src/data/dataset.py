@@ -72,8 +72,8 @@ class CerraEra5SuperResDataset(torch.utils.data.Dataset):
         self.lon_len = len(self.cerra_ds.longitude)
         
         # 6. Pre-calculate max indices for random cropping
-        self.max_lat_idx = self.lat_len - self.crop_size
-        self.max_lon_idx = self.lon_len - self.crop_size
+        self.max_lat_idx = self.lat_len - self.crop_size if self.crop_size is not None else 0
+        self.max_lon_idx = self.lon_len - self.crop_size if self.crop_size is not None else 0
 
     def __len__(self):
         time_axis = self.era5_ds.time.values

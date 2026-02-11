@@ -12,8 +12,8 @@ load: null
 restore_opt: 1                    # 0 = do not restore optimizer
 precision: "16-mixed"             # 32 | 16 | 16-mixed | bf16
 eval: test                        # val | test | null → train
-wandb_project: GeoUNet
-run_name: null
+wandb_project: GeoUNet_test
+run_name: GeoUNet
 regression_net: null
 gridtype: null
 hr_mean_conditioning: true
@@ -58,7 +58,7 @@ mask_patch_size: 12
 val_interval: 1
 lr: 2.0e-4
 epochs: 5000
-batch_size: 64
+batch_size: 32
 lr_decay: 1
 lr_rampup: 0
 grad_clip_threshold: null         # Set a number to enable clipping

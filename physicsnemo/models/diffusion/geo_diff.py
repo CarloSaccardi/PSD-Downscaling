@@ -666,6 +666,7 @@ class GeoUNetPosEmbd(GeoUNet):
         act: str = "silu",
         profile_mode: bool = False,
         amp_mode: bool = False,
+        swin_pretrained_checkpoint: str = None,
     ):
         super().__init__(
             img_resolution,

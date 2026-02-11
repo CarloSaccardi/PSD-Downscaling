@@ -37,6 +37,7 @@ class GeoUNetWrapper(pl.LightningModule):
         self.savepreds_path = args.savepreds_path
         self.load = args.load
         self.swin_pretrained_checkpoint = args.swin_pretrained_checkpoint
+        self.eval_mode = args.eval
         ### Generate fixed mask array filled with zeros
         self.mask_generator = MaskGenerator(
             input_size=args.cond_size[0],
@@ -198,16 +199,20 @@ class GeoUNetWrapper(pl.LightningModule):
         # 4. Reassemble for the whole batch
         full_pred = self.reassemble(full_pred_patches, B)
         full_target = self.reassemble(cerra_patches.view(-1, *cerra_patches.shape[2:]), B)
+        
+        # Log region-grouped images to a WandB table
+        self.load_metrics_and_plots(full_pred, full_target, mask=None)
 
         # 5. Metrics
         mse = F.mse_loss(full_pred, full_target)
         mae = F.l1_loss(full_pred, full_target)
 
-        # 5. Log as before (Lightning handles the epoch-end aggregation automatically)
-        self.log("test_mse", mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-        self.log("test_mae", mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+        # Log per-region metrics (aggregated across epoch by Lightning)
+        region = getattr(self, "current_region", "unknown")
+        self.log(f"test/{region}/mse", mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+        self.log(f"test/{region}/mae", mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
-        return {"test_mse": mse.detach(), "test_mae": mae.detach()}
+        return {f"test/{region}/mse": mse.detach(), f"test/{region}/mae": mae.detach()}
     
     
     def reassemble(self, patches, B):
@@ -228,28 +233,6 @@ class GeoUNetWrapper(pl.LightningModule):
         
         # 3. Combine: [B, C, 384, 384]
         return out.view(B, C, G * P, G * P)
-    
-
-    def on_test_epoch_end(self):
-        # 1. Concatenate all stored full-image samples
-        # Resulting shape: [Total_Samples, C, 384, 384]
-        all_preds = torch.cat([x["pred"] for x in self.test_step_outputs], dim=0)
-        all_targets = torch.cat([x["target"] for x in self.test_step_outputs], dim=0)
-
-        # 2. Compute Global Metrics
-        # Example: Global RMSE
-        global_mse = F.mse_loss(all_preds, all_targets)
-        global_rmse = torch.sqrt(global_mse)
-
-        # Example: Bias (Mean Error)
-        global_bias = torch.mean(all_preds - all_targets)
-
-        # 3. Logging
-        self.log("test_global_rmse", global_rmse, sync_dist=True)
-        self.log("test_global_bias", global_bias, sync_dist=True)
-
-        # 4. Clear memory for next time
-        self.test_step_outputs.clear()
     
     
     
@@ -293,61 +276,4 @@ class GeoUNetWrapper(pl.LightningModule):
             wandb.log(log_plot_dict)
         
         plt.close("all") 
-        
-        
-    def plot_preds(self, prediction, high_res, img_lr, diz_stats):
-        """
-        Plot one random sample from the batch (single variable):
-        [low‐res input, high‐res target, prediction, residual].
-        Here, `prediction` and `high_res` are already un‐normalized. We only
-        need to un‐normalize `img_lr` for plotting.
-        """
-        # If you need statistics to un‐normalize img_lr for plotting:
-        low_res_mean = diz_stats["mean_era5"]
-        low_res_std  = diz_stats["std_era5"]
 
-        # Un‐normalize img_lr before plotting
-        img_lr = img_lr * low_res_std + low_res_mean
-
-        # Select a random sample index and a random variable/channel index
-        sample_idx = random.randint(0, prediction.shape[0] - 1)
-        var_i      = random.randint(0, prediction.shape[1] - 1)
-
-        # Variable names and units (must match your constants)
-        var_name = constants.PARAM_NAMES_SHORT_CERRA[var_i]
-        var_unit = constants.PARAM_UNITS_CERRA[var_i]
-
-        # Extract 2D images for plotting (B, C, H, W → (H, W))
-        input_img   = img_lr[sample_idx, var_i, :, :].detach().cpu().numpy()
-        target_img  = high_res[sample_idx, var_i, :, :].detach().cpu().numpy()
-        pred_img    = prediction[sample_idx, var_i, :, :].detach().cpu().numpy()
-        residual_img = target_img - pred_img
-
-        # Build a 1×4 subplot (Input, Target, Prediction, Residual)
-        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-        axes[0].imshow(input_img,   cmap='plasma', origin='lower')
-        axes[0].set_title("Input")
-        axes[0].axis("off")
-
-        axes[1].imshow(target_img,  cmap='plasma', origin='lower')
-        axes[1].set_title("Target")
-        axes[1].axis("off")
-
-        axes[2].imshow(pred_img,    cmap='plasma', origin='lower')
-        axes[2].set_title("Prediction")
-        axes[2].axis("off")
-
-        axes[3].imshow(residual_img, cmap='plasma', origin='lower')
-        axes[3].set_title("Residual")
-        axes[3].axis("off")
-
-        # Overall title shows variable name and unit
-        fig.suptitle(f"{var_name} ({var_unit})", fontsize=16)
-
-        # Save the figure (e.g. into "plot_tests/")
-        save_dir = self.savepreds_path + "/" + self.load.split("/")[-2] + "/pred_plots"
-        os.makedirs(save_dir, exist_ok=True)
-        fname = os.path.join(save_dir, f"{var_name}_sample_{sample_idx}.png")
-        fig.savefig(fname, bbox_inches='tight')
-        plt.close(fig)
-    

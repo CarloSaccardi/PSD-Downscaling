@@ -404,7 +404,7 @@ def main(args):
         utils.init_wandb_metrics(logger)  # Do after wandb.init
 
     if args.eval:
-        regions = ["Iberia", "Scandinavia", "CentralEurope", "UK", "Turkey"]
+        regions = ["Iberia", "Scandinavia", "CentralEurope", "Turkey"]
         
         test_dataset_list = []
         
@@ -422,18 +422,21 @@ def main(args):
             
             test_dataset_list.append(test_dataset)
             
-        test_dataset = torch.utils.data.ConcatDataset(test_dataset_list)
+            #test_dataset = torch.utils.data.ConcatDataset(test_dataset_list)
 
-        test_loader = torch.utils.data.DataLoader(  
-            test_dataset,
-            args.batch_size,
-            shuffle=False,
-            num_workers=args.n_workers,
-        )
+            test_loader = torch.utils.data.DataLoader(  
+                test_dataset,
+                args.batch_size,
+                shuffle=False,
+                num_workers=args.n_workers,
+            )
         
-        trainer.test(model, dataloaders=test_loader)
+            # Tag region so test_step can log per-region metrics
+            model.current_region = region
+            trainer.test(model, dataloaders=test_loader)
+            
         test_loader.dataset.close()
-        
+
     else:
         
         regions = ["Scandinavia", "CentralEurope"]
