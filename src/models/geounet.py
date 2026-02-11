@@ -38,6 +38,7 @@ class GeoUNetWrapper(pl.LightningModule):
         self.load = args.load
         self.swin_pretrained_checkpoint = args.swin_pretrained_checkpoint
         self.eval_mode = args.eval
+        self.crop_size = args.crop_size
         ### Generate fixed mask array filled with zeros
         self.mask_generator = MaskGenerator(
             input_size=args.cond_size[0],
@@ -175,11 +176,12 @@ class GeoUNetWrapper(pl.LightningModule):
         # cerra_patches: [B, 16, C, 96, 96]
         # conditions: [B, C_cond, 384, 384]
         era5_patches, cerra_patches, conditions = batch
+        
         B = era5_patches.shape[0]
 
         # 1. Flatten patches: [B*16, C, 96, 96]
         # This allows the model to see B*16 as the batch size
-        era5_flat = era5_patches.view(-1, *era5_patches.shape[2:]) 
+        era5_flat = era5_patches.view(-1, *era5_patches.shape[2:]) if self.crop_size is not None else era5_patches
 
         # 2. Process Global Context
         if self.swin_pretrained_checkpoint is not None:
@@ -197,8 +199,8 @@ class GeoUNetWrapper(pl.LightningModule):
         full_pred_patches = self(era5_flat, features_list) 
 
         # 4. Reassemble for the whole batch
-        full_pred = self.reassemble(full_pred_patches, B)
-        full_target = self.reassemble(cerra_patches.view(-1, *cerra_patches.shape[2:]), B)
+        full_pred = self.reassemble(full_pred_patches, B) if self.crop_size is not None else full_pred_patches
+        full_target = self.reassemble(cerra_patches.view(-1, *cerra_patches.shape[2:]), B) if self.crop_size is not None else cerra_patches
         
         # Log region-grouped images to a WandB table
         self.load_metrics_and_plots(full_pred, full_target, mask=None)
